@@ -1,0 +1,51 @@
+# Pinned for Python 3.14 on Windows. orjson, asyncpg, and
+# pydantic/pydantic-core are bumped to the first versions that ship
+# prebuilt cp314 wheels (no Rust/C++ toolchain needed). psycopg uses
+# psycopg3 (binary) instead of psycopg2, which has no 3.14 wheel.
+# See README "Dependency notes" for details and version history.
+
+# ---------- Web framework ----------
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+orjson==3.11.9
+
+# ---------- Database ----------
+sqlalchemy[asyncio]==2.0.41
+alembic==1.14.0
+asyncpg==0.31.0
+psycopg[binary]==3.3.4
+pgvector==0.3.6
+
+# ---------- Cache / queue ----------
+redis==5.2.1
+celery[redis]==5.4.0
+
+# ---------- Auth & security ----------
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.2.1
+cryptography==44.0.0
+email-validator==2.2.0
+
+# ---------- Settings / validation ----------
+pydantic==2.12.5
+pydantic-settings==2.8.1
+
+# ---------- HTTP client (Meta Graph API) ----------
+httpx==0.28.1
+tenacity==9.0.0
+
+# ---------- AI ----------
+langchain==0.3.13
+langchain-openai==0.2.14
+langchain-anthropic==0.3.1
+langchain-community==0.3.13
+
+# ---------- Utilities ----------
+python-dotenv==1.0.1
+structlog==24.4.0
+
+# ---------- Testing ----------
+pytest==8.3.4
+pytest-asyncio==0.25.0
