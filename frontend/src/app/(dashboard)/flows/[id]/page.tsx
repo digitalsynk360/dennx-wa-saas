@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import ReactFlow, {
   Background, BackgroundVariant, BaseEdge, Connection, Controls,
@@ -36,109 +36,108 @@ interface NodeDef {
 
 /* ─── Palette ────────────────────────────────────────────────────── */
 const NODE_DEFS: NodeDef[] = [
-  { type:"keyword_trigger",     label:"Keyword Trigger",   subtitle:"Start flow on keyword match",      icon:<Zap className="h-4 w-4"/>,          color:"#f59e0b", bgLight:"#fffbeb", category:"Triggers",
+  { type:"keyword_trigger", label:"Keyword Trigger", subtitle:"Start flow on keyword match", icon:<Zap className="h-4 w-4"/>, color:"#f59e0b", bgLight:"#fffbeb", category:"Triggers",
     fields:[{key:"keywords_raw",label:"TRIGGER KEYWORD",type:"text",placeholder:"Set keyword..."},{key:"match_type",label:"MATCH TYPE",type:"select",options:[{label:"contains",value:"contains"},{label:"exact",value:"exact"},{label:"starts with",value:"starts_with"}]}]},
-  { type:"new_message_trigger", label:"New Message",       subtitle:"Trigger on any new message",       icon:<MessageCircle className="h-4 w-4"/>, color:"#f59e0b", bgLight:"#fffbeb", category:"Triggers",
+  { type:"new_message_trigger", label:"New Message", subtitle:"Trigger on any new message", icon:<MessageCircle className="h-4 w-4"/>, color:"#f59e0b", bgLight:"#fffbeb", category:"Triggers",
     fields:[{key:"channel",label:"CHANNEL",type:"select",options:[{label:"WhatsApp",value:"whatsapp"}]}]},
-  { type:"webhook_trigger",     label:"Webhook Trigger",   subtitle:"Start flow from webhook",          icon:<Webhook className="h-4 w-4"/>,       color:"#f59e0b", bgLight:"#fffbeb", category:"Triggers",
+  { type:"webhook_trigger", label:"Webhook Trigger", subtitle:"Start flow from webhook", icon:<Webhook className="h-4 w-4"/>, color:"#f59e0b", bgLight:"#fffbeb", category:"Triggers",
     fields:[{key:"secret_key",label:"WEBHOOK PATH",type:"text",placeholder:"/webhook"}]},
-  { type:"schedule_trigger",    label:"Schedule Trigger",  subtitle:"Run flow on a schedule",           icon:<Calendar className="h-4 w-4"/>,      color:"#f59e0b", bgLight:"#fffbeb", category:"Triggers",
+  { type:"schedule_trigger", label:"Schedule Trigger", subtitle:"Run flow on a schedule", icon:<Calendar className="h-4 w-4"/>, color:"#f59e0b", bgLight:"#fffbeb", category:"Triggers",
     fields:[{key:"date",label:"DATE",type:"text",placeholder:"DD/MM/YYYY"},{key:"time",label:"TIME",type:"text",placeholder:"HH:MM"},{key:"frequency",label:"FREQUENCY",type:"select",options:[{label:"Once",value:"once"},{label:"Daily",value:"daily"},{label:"Weekly",value:"weekly"}]}]},
-  { type:"send_text",      label:"Send Text",      subtitle:"Send a text message",          icon:<MessageSquare className="h-4 w-4"/>, color:"#3b82f6", bgLight:"#eff6ff", category:"Messages",
+  { type:"send_text", label:"Send Text", subtitle:"Send a text message", icon:<MessageSquare className="h-4 w-4"/>, color:"#3b82f6", bgLight:"#eff6ff", category:"Messages",
     fields:[{key:"message",label:"MESSAGE",type:"textarea",placeholder:"Type your message here...",rows:4},{key:"footer",label:"FOOTER (optional)",type:"text",placeholder:"Reply STOP to unsubscribe"}]},
-  { type:"send_image",     label:"Send Image",     subtitle:"Send an image with caption",   icon:<FileText className="h-4 w-4"/>,      color:"#3b82f6", bgLight:"#eff6ff", category:"Messages",
+  { type:"send_image", label:"Send Image", subtitle:"Send an image with caption", icon:<FileText className="h-4 w-4"/>, color:"#3b82f6", bgLight:"#eff6ff", category:"Messages",
     fields:[{key:"image_url",label:"IMAGE URL",type:"text",placeholder:"https://..."},{key:"caption",label:"CAPTION",type:"text",placeholder:"Optional caption"}]},
-  { type:"send_video",     label:"Send Video",     subtitle:"Send a video with caption",    icon:<FileText className="h-4 w-4"/>,      color:"#3b82f6", bgLight:"#eff6ff", category:"Messages",
+  { type:"send_video", label:"Send Video", subtitle:"Send a video with caption", icon:<FileText className="h-4 w-4"/>, color:"#3b82f6", bgLight:"#eff6ff", category:"Messages",
     fields:[{key:"video_url",label:"VIDEO URL",type:"text",placeholder:"https://..."},{key:"caption",label:"CAPTION",type:"text",placeholder:"Optional"}]},
-  { type:"send_audio",     label:"Send Audio",     subtitle:"Send an audio message",        icon:<FileText className="h-4 w-4"/>,      color:"#3b82f6", bgLight:"#eff6ff", category:"Messages",
+  { type:"send_audio", label:"Send Audio", subtitle:"Send an audio message", icon:<FileText className="h-4 w-4"/>, color:"#3b82f6", bgLight:"#eff6ff", category:"Messages",
     fields:[{key:"audio_url",label:"AUDIO URL",type:"text",placeholder:"https://..."}]},
-  { type:"send_document",  label:"Send Document",  subtitle:"Send a file or document",      icon:<FileText className="h-4 w-4"/>,      color:"#3b82f6", bgLight:"#eff6ff", category:"Messages",
+  { type:"send_document", label:"Send Document", subtitle:"Send a file or document", icon:<FileText className="h-4 w-4"/>, color:"#3b82f6", bgLight:"#eff6ff", category:"Messages",
     fields:[{key:"file_url",label:"FILE URL",type:"text",placeholder:"https://..."},{key:"file_name",label:"FILE NAME",type:"text",placeholder:"document.pdf"}]},
-  { type:"send_buttons",   label:"Send Buttons",   subtitle:"Send message with reply buttons", icon:<List className="h-4 w-4"/>,       color:"#8b5cf6", bgLight:"#f5f3ff", category:"Messages",
+  { type:"send_buttons", label:"Send Buttons", subtitle:"Send message with reply buttons", icon:<List className="h-4 w-4"/>, color:"#8b5cf6", bgLight:"#f5f3ff", category:"Messages",
     fields:[{key:"message",label:"MESSAGE",type:"textarea",placeholder:"Choose an option:",rows:2},{key:"button_1",label:"BUTTON 1",type:"text",placeholder:"Option A"},{key:"button_2",label:"BUTTON 2",type:"text",placeholder:"Option B"},{key:"button_3",label:"BUTTON 3",type:"text",placeholder:"Option C"}],
     outputs:[{id:"button_1",label:"Button 1",color:"#8b5cf6"},{id:"button_2",label:"Button 2",color:"#8b5cf6"},{id:"button_3",label:"Button 3",color:"#8b5cf6"}]},
-  { type:"send_list",      label:"Send List",      subtitle:"Send a list menu",              icon:<List className="h-4 w-4"/>,          color:"#6366f1", bgLight:"#eef2ff", category:"Messages",
+  { type:"send_list", label:"Send List", subtitle:"Send a list menu", icon:<List className="h-4 w-4"/>, color:"#6366f1", bgLight:"#eef2ff", category:"Messages",
     fields:[{key:"title",label:"TITLE",type:"text",placeholder:"Choose from the list"},{key:"description",label:"DESCRIPTION",type:"text",placeholder:"Optional"}]},
-  { type:"send_template",  label:"Send Template",  subtitle:"Send a WhatsApp template",     icon:<FileText className="h-4 w-4"/>,      color:"#7c3aed", bgLight:"#f5f3ff", category:"Messages",
+  { type:"send_template", label:"Send Template", subtitle:"Send a WhatsApp template", icon:<FileText className="h-4 w-4"/>, color:"#7c3aed", bgLight:"#f5f3ff", category:"Messages",
     fields:[{key:"template_name",label:"TEMPLATE NAME",type:"text",placeholder:"order_confirmed"}]},
-  { type:"ask_question", label:"Ask Question", subtitle:"Ask user a question",    icon:<MessageCircle className="h-4 w-4"/>, color:"#14b8a6", bgLight:"#f0fdfa", category:"User Input",
+  { type:"ask_question", label:"Ask Question", subtitle:"Ask user a question", icon:<MessageCircle className="h-4 w-4"/>, color:"#14b8a6", bgLight:"#f0fdfa", category:"User Input",
     fields:[{key:"question",label:"QUESTION",type:"textarea",placeholder:"What is your name?",rows:2},{key:"variable_name",label:"SAVE ANSWER AS",type:"text",placeholder:"user_answer"}]},
-  { type:"ask_name",     label:"Ask Name",     subtitle:"Collect user's name",    icon:<Users className="h-4 w-4"/>,         color:"#14b8a6", bgLight:"#f0fdfa", category:"User Input",
+  { type:"ask_name", label:"Ask Name", subtitle:"Collect user's name", icon:<Users className="h-4 w-4"/>, color:"#14b8a6", bgLight:"#f0fdfa", category:"User Input",
     fields:[{key:"variable_name",label:"SAVE AS",type:"text",placeholder:"contact_name"}]},
-  { type:"ask_phone",    label:"Ask Phone",    subtitle:"Collect phone number",   icon:<Phone className="h-4 w-4"/>,         color:"#14b8a6", bgLight:"#f0fdfa", category:"User Input",
+  { type:"ask_phone", label:"Ask Phone", subtitle:"Collect phone number", icon:<Phone className="h-4 w-4"/>, color:"#14b8a6", bgLight:"#f0fdfa", category:"User Input",
     fields:[{key:"variable_name",label:"SAVE AS",type:"text",placeholder:"phone_number"}]},
-  { type:"ask_email",    label:"Ask Email",    subtitle:"Collect email address",  icon:<Globe className="h-4 w-4"/>,         color:"#14b8a6", bgLight:"#f0fdfa", category:"User Input",
+  { type:"ask_email", label:"Ask Email", subtitle:"Collect email address", icon:<Globe className="h-4 w-4"/>, color:"#14b8a6", bgLight:"#f0fdfa", category:"User Input",
     fields:[{key:"variable_name",label:"SAVE AS",type:"text",placeholder:"email"}]},
-  { type:"ask_number",   label:"Ask Number",   subtitle:"Collect a number",       icon:<Hash className="h-4 w-4"/>,          color:"#14b8a6", bgLight:"#f0fdfa", category:"User Input",
+  { type:"ask_number", label:"Ask Number", subtitle:"Collect a number", icon:<Hash className="h-4 w-4"/>, color:"#14b8a6", bgLight:"#f0fdfa", category:"User Input",
     fields:[{key:"variable_name",label:"SAVE AS",type:"text",placeholder:"quantity"},{key:"min",label:"MIN",type:"number"},{key:"max",label:"MAX",type:"number"}]},
-  { type:"ask_date",     label:"Ask Date",     subtitle:"Collect a date",         icon:<Calendar className="h-4 w-4"/>,      color:"#14b8a6", bgLight:"#f0fdfa", category:"User Input",
+  { type:"ask_date", label:"Ask Date", subtitle:"Collect a date", icon:<Calendar className="h-4 w-4"/>, color:"#14b8a6", bgLight:"#f0fdfa", category:"User Input",
     fields:[{key:"variable_name",label:"SAVE AS",type:"text",placeholder:"booking_date"},{key:"format",label:"FORMAT",type:"text",placeholder:"DD/MM/YYYY"}]},
-  { type:"ask_file",     label:"Ask File",     subtitle:"Request file upload",    icon:<FileText className="h-4 w-4"/>,      color:"#14b8a6", bgLight:"#f0fdfa", category:"User Input",
+  { type:"ask_file", label:"Ask File", subtitle:"Request file upload", icon:<FileText className="h-4 w-4"/>, color:"#14b8a6", bgLight:"#f0fdfa", category:"User Input",
     fields:[{key:"variable_name",label:"SAVE AS",type:"text",placeholder:"file"},{key:"allowed_types",label:"ALLOWED TYPES",type:"text",placeholder:"pdf, jpg, png"}]},
-  { type:"if_else",        label:"If / Else",      subtitle:"Branch based on condition",      icon:<GitBranch className="h-4 w-4"/>,   color:"#f59e0b", bgLight:"#fffbeb", category:"Logic",
+  { type:"if_else", label:"If / Else", subtitle:"Branch based on condition", icon:<GitBranch className="h-4 w-4"/>, color:"#f59e0b", bgLight:"#fffbeb", category:"Logic",
     fields:[{key:"variable",label:"VARIABLE",type:"text",placeholder:"user_answer"},{key:"operator",label:"OPERATOR",type:"select",options:[{label:"equals",value:"equals"},{label:"not equals",value:"not_equals"},{label:"contains",value:"contains"},{label:"starts with",value:"starts_with"},{label:"greater than",value:"greater_than"},{label:"less than",value:"less_than"}]},{key:"value",label:"VALUE",type:"text",placeholder:"yes"}],
     outputs:[{id:"true",label:"True ✓",color:"#22c55e"},{id:"false",label:"False ✗",color:"#ef4444"}]},
-  { type:"switch",         label:"Switch",         subtitle:"Multiple condition branches",    icon:<GitBranch className="h-4 w-4"/>,   color:"#f59e0b", bgLight:"#fffbeb", category:"Logic",
+  { type:"switch", label:"Switch", subtitle:"Multiple condition branches", icon:<GitBranch className="h-4 w-4"/>, color:"#f59e0b", bgLight:"#fffbeb", category:"Logic",
     fields:[{key:"variable",label:"VARIABLE",type:"text",placeholder:"user_choice"}]},
-  { type:"delay",          label:"Delay",          subtitle:"Wait before next step",          icon:<Clock className="h-4 w-4"/>,       color:"#6b7280", bgLight:"#f9fafb", category:"Logic",
+  { type:"delay", label:"Delay", subtitle:"Wait before next step", icon:<Clock className="h-4 w-4"/>, color:"#6b7280", bgLight:"#f9fafb", category:"Logic",
     fields:[{key:"seconds",label:"SECONDS",type:"number"},{key:"minutes",label:"MINUTES",type:"number"},{key:"hours",label:"HOURS",type:"number"}]},
-  { type:"wait_for_reply", label:"Wait For Reply", subtitle:"Pause until user replies",       icon:<MessageCircle className="h-4 w-4"/>, color:"#6b7280", bgLight:"#f9fafb", category:"Logic",
+  { type:"wait_for_reply", label:"Wait For Reply", subtitle:"Pause until user replies", icon:<MessageCircle className="h-4 w-4"/>, color:"#6b7280", bgLight:"#f9fafb", category:"Logic",
     fields:[{key:"timeout",label:"TIMEOUT (seconds)",type:"number",placeholder:"3600"}]},
-  { type:"go_to_flow",     label:"Go To Flow",     subtitle:"Jump to another flow",           icon:<ArrowLeft className="h-4 w-4"/>,   color:"#6b7280", bgLight:"#f9fafb", category:"Logic",
+  { type:"go_to_flow", label:"Go To Flow", subtitle:"Jump to another flow", icon:<ArrowLeft className="h-4 w-4"/>, color:"#6b7280", bgLight:"#f9fafb", category:"Logic",
     fields:[{key:"target_flow",label:"TARGET FLOW ID",type:"text",placeholder:"Flow ID"}]},
-  { type:"save_variable",   label:"Save Variable",   subtitle:"Store a value",                icon:<Save className="h-4 w-4"/>,       color:"#0891b2", bgLight:"#ecfeff", category:"Variables",
+  { type:"save_variable", label:"Save Variable", subtitle:"Store a value", icon:<Save className="h-4 w-4"/>, color:"#0891b2", bgLight:"#ecfeff", category:"Variables",
     fields:[{key:"variable_name",label:"VARIABLE NAME",type:"text",placeholder:"my_variable"},{key:"value",label:"VALUE",type:"text",placeholder:"{{interpolated}}"}]},
-  { type:"update_variable", label:"Update Variable", subtitle:"Update existing variable",     icon:<Settings className="h-4 w-4"/>,   color:"#0891b2", bgLight:"#ecfeff", category:"Variables",
+  { type:"update_variable", label:"Update Variable", subtitle:"Update existing variable", icon:<Settings className="h-4 w-4"/>, color:"#0891b2", bgLight:"#ecfeff", category:"Variables",
     fields:[{key:"variable_name",label:"VARIABLE NAME",type:"text",placeholder:"my_variable"},{key:"new_value",label:"NEW VALUE",type:"text",placeholder:"new value"}]},
-  { type:"delete_variable", label:"Delete Variable", subtitle:"Remove a variable",            icon:<X className="h-4 w-4"/>,          color:"#0891b2", bgLight:"#ecfeff", category:"Variables",
+  { type:"delete_variable", label:"Delete Variable", subtitle:"Remove a variable", icon:<X className="h-4 w-4"/>, color:"#0891b2", bgLight:"#ecfeff", category:"Variables",
     fields:[{key:"variable_name",label:"VARIABLE NAME",type:"text",placeholder:"my_variable"}]},
-  { type:"create_contact", label:"Create Contact", subtitle:"Add new contact",  icon:<Users className="h-4 w-4"/>, color:"#16a34a", bgLight:"#f0fdf4", category:"Contacts",
+  { type:"create_contact", label:"Create Contact", subtitle:"Add new contact", icon:<Users className="h-4 w-4"/>, color:"#16a34a", bgLight:"#f0fdf4", category:"Contacts",
     fields:[{key:"name",label:"NAME",type:"text",placeholder:"{{full_name}}"},{key:"phone",label:"PHONE",type:"text",placeholder:"{{phone}}"},{key:"email",label:"EMAIL",type:"text",placeholder:"{{email}}"}]},
   { type:"update_contact", label:"Update Contact", subtitle:"Update contact details", icon:<Users className="h-4 w-4"/>, color:"#16a34a", bgLight:"#f0fdf4", category:"Contacts",
     fields:[{key:"name",label:"NAME",type:"text",placeholder:"{{full_name}}"}]},
-  { type:"add_tag",    label:"Add Tag",    subtitle:"Tag a contact",        icon:<Tag className="h-4 w-4"/>, color:"#16a34a", bgLight:"#f0fdf4", category:"Contacts",
+  { type:"add_tag", label:"Add Tag", subtitle:"Tag a contact", icon:<Tag className="h-4 w-4"/>, color:"#16a34a", bgLight:"#f0fdf4", category:"Contacts",
     fields:[{key:"tag_name",label:"TAG NAME",type:"text",placeholder:"VIP Customer"}]},
-  { type:"remove_tag", label:"Remove Tag", subtitle:"Remove contact tag",   icon:<Tag className="h-4 w-4"/>, color:"#16a34a", bgLight:"#f0fdf4", category:"Contacts",
+  { type:"remove_tag", label:"Remove Tag", subtitle:"Remove contact tag", icon:<Tag className="h-4 w-4"/>, color:"#16a34a", bgLight:"#f0fdf4", category:"Contacts",
     fields:[{key:"tag_name",label:"TAG NAME",type:"text",placeholder:"VIP Customer"}]},
-  { type:"assign_agent",  label:"Assign Agent",  subtitle:"Assign to a team member", icon:<Users className="h-4 w-4"/>, color:"#e11d48", bgLight:"#fff1f2", category:"Team",
+  { type:"assign_agent", label:"Assign Agent", subtitle:"Assign to a team member", icon:<Users className="h-4 w-4"/>, color:"#e11d48", bgLight:"#fff1f2", category:"Team",
     fields:[{key:"strategy",label:"STRATEGY",type:"select",options:[{label:"Round Robin",value:"round_robin"},{label:"Least Busy",value:"least_busy"},{label:"Specific Agent",value:"specific"}]},{key:"agent_id",label:"AGENT ID",type:"text",placeholder:"Agent user ID"}]},
-  { type:"transfer_chat",  label:"Transfer Chat",  subtitle:"Transfer to team or agent", icon:<Send className="h-4 w-4"/>,  color:"#e11d48", bgLight:"#fff1f2", category:"Team",
+  { type:"transfer_chat", label:"Transfer Chat", subtitle:"Transfer to team or agent", icon:<Send className="h-4 w-4"/>, color:"#e11d48", bgLight:"#fff1f2", category:"Team",
     fields:[{key:"team",label:"TEAM",type:"text",placeholder:"Support Team"},{key:"agent",label:"AGENT (optional)",type:"text",placeholder:"Leave blank for any"}]},
-  { type:"create_ticket",  label:"Create Ticket",  subtitle:"Open a support ticket",     icon:<Settings className="h-4 w-4"/>, color:"#e11d48", bgLight:"#fff1f2", category:"Team",
+  { type:"create_ticket", label:"Create Ticket", subtitle:"Open a support ticket", icon:<Settings className="h-4 w-4"/>, color:"#e11d48", bgLight:"#fff1f2", category:"Team",
     fields:[{key:"subject",label:"SUBJECT",type:"text",placeholder:"{{issue}}"},{key:"priority",label:"PRIORITY",type:"select",options:[{label:"Low",value:"low"},{label:"Normal",value:"normal"},{label:"High",value:"high"},{label:"Critical",value:"critical"}]}]},
   { type:"api_request", label:"API Request", subtitle:"Call an external API", icon:<Globe className="h-4 w-4"/>, color:"#0284c7", bgLight:"#f0f9ff", category:"Integrations",
     fields:[{key:"method",label:"METHOD",type:"select",options:[{label:"GET",value:"GET"},{label:"POST",value:"POST"},{label:"PUT",value:"PUT"},{label:"DELETE",value:"DELETE"}]},{key:"url",label:"URL",type:"text",placeholder:"https://api.example.com/data"},{key:"body",label:"BODY (JSON)",type:"textarea",placeholder:'{"key":"{{value}}"}',rows:3},{key:"save_response_variable",label:"SAVE RESPONSE AS",type:"text",placeholder:"_api_response"}],
     outputs:[{id:"success",label:"Success",color:"#22c55e"},{id:"error",label:"Error",color:"#ef4444"}]},
-  { type:"find_record",   label:"Find Record",   subtitle:"Search database records", icon:<Database className="h-4 w-4"/>, color:"#475569", bgLight:"#f8fafc", category:"Database",
+  { type:"find_record", label:"Find Record", subtitle:"Search database records", icon:<Database className="h-4 w-4"/>, color:"#475569", bgLight:"#f8fafc", category:"Database",
     fields:[{key:"table",label:"TABLE",type:"text",placeholder:"contacts"},{key:"conditions",label:"CONDITIONS (JSON)",type:"textarea",placeholder:'{"phone":"{{phone}}"}',rows:2}],
     outputs:[{id:"found",label:"Found",color:"#22c55e"},{id:"not_found",label:"Not Found",color:"#f59e0b"}]},
-  { type:"create_record", label:"Create Record", subtitle:"Insert database record",   icon:<Database className="h-4 w-4"/>, color:"#475569", bgLight:"#f8fafc", category:"Database",
+  { type:"create_record", label:"Create Record", subtitle:"Insert database record", icon:<Database className="h-4 w-4"/>, color:"#475569", bgLight:"#f8fafc", category:"Database",
     fields:[{key:"table",label:"TABLE",type:"text",placeholder:"orders"},{key:"data",label:"DATA (JSON)",type:"textarea",placeholder:'{"name":"{{name}}"}',rows:2}]},
   { type:"create_payment_link", label:"Payment Link", subtitle:"Generate a payment link", icon:<CreditCard className="h-4 w-4"/>, color:"#059669", bgLight:"#ecfdf5", category:"Payments",
     fields:[{key:"amount",label:"AMOUNT",type:"number",placeholder:"999"},{key:"currency",label:"CURRENCY",type:"text",placeholder:"INR"},{key:"description",label:"DESCRIPTION",type:"text",placeholder:"Order payment"}],
     outputs:[{id:"paid",label:"Paid",color:"#22c55e"},{id:"failed",label:"Failed",color:"#ef4444"}]},
-  { type:"end_flow",  label:"End Flow",  subtitle:"Complete the flow",     icon:<Flag className="h-4 w-4"/>, color:"#dc2626", bgLight:"#fef2f2", category:"Flow Control",
+  { type:"end_flow", label:"End Flow", subtitle:"Complete the flow", icon:<Flag className="h-4 w-4"/>, color:"#dc2626", bgLight:"#fef2f2", category:"Flow Control",
     fields:[{key:"completion_message",label:"COMPLETION MESSAGE",type:"textarea",placeholder:"Thank you! Have a great day.",rows:2}]},
-  { type:"stop_flow", label:"Stop Flow", subtitle:"Stop flow immediately", icon:<X className="h-4 w-4"/>,    color:"#dc2626", bgLight:"#fef2f2", category:"Flow Control",
+  { type:"stop_flow", label:"Stop Flow", subtitle:"Stop flow immediately", icon:<X className="h-4 w-4"/>, color:"#dc2626", bgLight:"#fef2f2", category:"Flow Control",
     fields:[{key:"reason",label:"REASON",type:"text",placeholder:"User requested stop"}]},
 ];
 
 const NODE_MAP = Object.fromEntries(NODE_DEFS.map(d => [d.type, d]));
 const CATEGORIES = [...new Set(NODE_DEFS.map(d => d.category))];
 
-/* ─── Summary text shown in collapsed node ───────────────────────── */
 function getSummary(type: string, data: Record<string, any>): string {
   const d = data || {};
   switch(type) {
-    case "keyword_trigger":  return d.keywords_raw || "Set keyword...";
-    case "webhook_trigger":  return d.secret_key || "/webhook";
-    case "send_text":        return d.message || "Type your message here...";
-    case "ask_question":     return d.question || "Set your question...";
-    case "send_buttons":     return d.message || "Choose an option:";
-    case "if_else":          return d.variable ? `${d.variable} ${d.operator||"equals"} "${d.value||""}"` : "Set condition...";
-    case "delay":            return [d.seconds&&`${d.seconds}s`, d.minutes&&`${d.minutes}m`, d.hours&&`${d.hours}h`].filter(Boolean).join(" ") || "Set delay...";
-    case "api_request":      return d.url || "Set API URL...";
-    case "save_variable":    return d.variable_name ? `${d.variable_name} = ${d.value||"?"}` : "Set variable...";
+    case "keyword_trigger": return d.keywords_raw || "Set keyword...";
+    case "webhook_trigger": return d.secret_key || "/webhook";
+    case "send_text": return d.message || "Type your message here...";
+    case "ask_question": return d.question || "Set your question...";
+    case "send_buttons": return d.message || "Choose an option:";
+    case "if_else": return d.variable ? `${d.variable} ${d.operator||"equals"} "${d.value||""}"` : "Set condition...";
+    case "delay": return [d.seconds&&`${d.seconds}s`, d.minutes&&`${d.minutes}m`, d.hours&&`${d.hours}h`].filter(Boolean).join(" ") || "Set delay...";
+    case "api_request": return d.url || "Set API URL...";
+    case "save_variable": return d.variable_name ? `${d.variable_name} = ${d.value||"?"}` : "Set variable...";
     default: {
       const def = NODE_MAP[type];
       if (def?.fields[0]) return (d[def.fields[0].key] as string) || def.fields[0].placeholder || "Configure...";
@@ -175,24 +174,21 @@ function DeletableEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition,
 
 const edgeTypes = { deletable: DeletableEdge };
 
-/* ─── Node popup panel (rendered as overlay inside node) ─────────── */
+/* ─── Node popup ─────────────────────────────────────────────────── */
 function NodePopup({ def, data, onSave, onClose }: {
   def: NodeDef; data: Record<string, any>;
   onSave: (d: Record<string, any>) => void; onClose: () => void;
 }) {
   const [local, setLocal] = useState<Record<string, any>>({ ...data });
   const set = (k: string, v: any) => setLocal(p => ({ ...p, [k]: v }));
-
   const handleSave = () => { onSave(local); onClose(); };
 
   return (
-    // Full-screen dimmed backdrop — click outside = close
     <div className="fixed inset-0 z-[9999] flex items-center justify-center"
       style={{ backgroundColor: "rgba(0,0,0,0.25)" }}
       onMouseDown={e => { if (e.target === e.currentTarget) { onSave(local); onClose(); } }}>
       <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-80 max-h-[85vh] flex flex-col"
         onMouseDown={e => e.stopPropagation()}>
-        {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b rounded-t-2xl flex-shrink-0"
           style={{ backgroundColor: def.bgLight }}>
           <div className="flex items-center gap-2">
@@ -206,7 +202,6 @@ function NodePopup({ def, data, onSave, onClose }: {
             <X className="h-4 w-4" />
           </button>
         </div>
-        {/* Fields */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {def.fields.map(f => (
             <div key={f.key}>
@@ -230,7 +225,6 @@ function NodePopup({ def, data, onSave, onClose }: {
             </div>
           ))}
         </div>
-        {/* Save button */}
         <div className="px-4 pb-4 pt-2 flex-shrink-0 border-t border-gray-100">
           <button onClick={handleSave}
             className="w-full rounded-xl py-2.5 text-sm font-bold text-white transition-opacity hover:opacity-90"
@@ -243,19 +237,15 @@ function NodePopup({ def, data, onSave, onClose }: {
   );
 }
 
-/* ─── Flow Node — fixed size, popup on click ─────────────────────── */
-// Global state for popup — only one open at a time
+/* ─── Global popup state ─────────────────────────────────────────── */
 let globalSetPopup: ((id: string | null) => void) | null = null;
 
+/* ─── Flow Node ──────────────────────────────────────────────────── */
 function FlowNode({ id, data, type, selected }: NodeProps) {
   const def = NODE_MAP[type || "send_text"];
   const { setNodes, setEdges } = useReactFlow();
-  if (!def) return null;
 
-  const isEndNode = type === "end_flow" || type === "stop_flow";
-  const hasOutputs = (def.outputs?.length || 0) > 0;
-  const summary = getSummary(type || "", data as Record<string, any>);
-
+  // ✅ ALL hooks BEFORE any early return
   const openPopup = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     globalSetPopup?.(id);
@@ -276,35 +266,36 @@ function FlowNode({ id, data, type, selected }: NodeProps) {
     });
   }, [id, setNodes]);
 
+  // ✅ Early return AFTER hooks
+  if (!def) return null;
+
+  const isEndNode = type === "end_flow" || type === "stop_flow";
+  const hasOutputs = (def.outputs?.length || 0) > 0;
+  const summary = getSummary(type || "", data as Record<string, any>);
+
   return (
-    <div
-      style={{ width: 220 }}
+    <div style={{ width: 220 }}
       className={cn(
         "rounded-2xl bg-white border-2 shadow-md cursor-pointer select-none transition-shadow",
         selected ? "border-blue-400 shadow-blue-200 shadow-lg" : "border-gray-200 hover:border-gray-300 hover:shadow-lg"
       )}
-      onClick={openPopup}
-    >
-      {/* Toolbar on select */}
+      onClick={openPopup}>
+
       <NodeToolbar isVisible={selected} position={Position.Top}
         className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl shadow-lg px-1.5 py-1">
-        <button onClick={handleCopy}
-          className="p-1.5 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-500 transition-colors">
+        <button onClick={handleCopy} className="p-1.5 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-500 transition-colors">
           <Copy className="h-3.5 w-3.5" />
         </button>
         <div className="w-px h-4 bg-gray-200" />
-        <button onClick={handleDelete}
-          className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
+        <button onClick={handleDelete} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
           <Trash2 className="h-3.5 w-3.5" />
         </button>
       </NodeToolbar>
 
-      {/* Target handle — left center */}
       <Handle type="target" position={Position.Left}
         className="!w-3.5 !h-3.5 !rounded-full !border-2 !border-white !bg-gray-300 hover:!bg-blue-400 !transition-colors"
         style={{ left: -7 }} />
 
-      {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 rounded-t-2xl"
         style={{ backgroundColor: def.bgLight, borderBottom: `1.5px solid ${def.color}22` }}>
         <div className="flex items-center gap-2 min-w-0">
@@ -325,12 +316,10 @@ function FlowNode({ id, data, type, selected }: NodeProps) {
         )}
       </div>
 
-      {/* Body — fixed height summary */}
       <div className="px-3 py-2.5" style={{ minHeight: 48 }}>
         <p className="text-xs text-gray-400 line-clamp-2 leading-relaxed">{summary}</p>
       </div>
 
-      {/* Outputs row or single right handle */}
       {hasOutputs ? (
         <div className="px-3 pb-3 space-y-1.5">
           {def.outputs!.map(out => (
@@ -399,17 +388,6 @@ function TestPanel({ flowId, onClose }: { flowId: string; onClose: () => void })
           <div className={cn("rounded-xl px-4 py-3 text-sm font-bold border", res.execution.status === "completed" ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200")}>
             {res.execution.status === "completed" ? "✓ Completed" : "✗ Failed"}
           </div>
-          {Object.keys(res.execution.variables).length > 0 && (
-            <div className="rounded-xl border border-gray-200 p-4">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Variables</p>
-              {Object.entries(res.execution.variables).map(([k, v]) => (
-                <div key={k} className="flex justify-between text-xs py-0.5">
-                  <span className="font-mono font-bold text-blue-500">{k}</span>
-                  <span className="text-gray-500 truncate max-w-[160px]">{String(v)}</span>
-                </div>
-              ))}
-            </div>
-          )}
           {res.logs.map((l, i) => (
             <div key={i} className={cn("rounded-xl border p-3", l.status === "ok" ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50")}>
               <div className="flex justify-between items-center">
@@ -423,9 +401,7 @@ function TestPanel({ flowId, onClose }: { flowId: string; onClose: () => void })
             </div>
           ))}
         </> : !loading && (
-          <div className="text-center py-12 text-gray-400">
-            <p className="text-sm">Run a test to see results</p>
-          </div>
+          <div className="text-center py-12 text-gray-400"><p className="text-sm">Run a test to see results</p></div>
         )}
       </div>
     </div>
@@ -482,14 +458,13 @@ function FlowBuilderInner() {
   const [statusMsg, setStatusMsg] = useState("");
   const [popupNodeId, setPopupNodeId] = useState<string | null>(null);
   const undoRedo = useUndoRedo();
+  const droppingRef = useRef(false);
 
-  // Register global popup setter so FlowNode can trigger it
   useEffect(() => {
     globalSetPopup = setPopupNodeId;
     return () => { globalSetPopup = null; };
   }, []);
 
-  // Popup node + def
   const popupNode = nodes.find(n => n.id === popupNodeId) ?? null;
   const popupDef = popupNode ? NODE_MAP[popupNode.type || ""] : null;
 
@@ -498,7 +473,6 @@ function FlowBuilderInner() {
     setNodes(nds => nds.map(n => n.id === popupNodeId ? { ...n, data: { ...n.data, ...newData } } : n));
   }, [popupNodeId, setNodes]);
 
-  // Load flow
   useEffect(() => {
     api.get<FlowResponse>(`/flows/${flowId}`).then(({ data }) => {
       setFlow(data);
@@ -524,8 +498,6 @@ function FlowBuilderInner() {
     setEdges(eds => { const next = addEdge(edge, eds); undoRedo.push(nodes, next); return next; });
   }, [nodes, setEdges, undoRedo]);
 
-  // Drag handlers — use ref flag to prevent double-add
-  const droppingRef = React.useRef(false);
   const onDragStart = (e: React.DragEvent, t: string) => {
     e.dataTransfer.setData("application/reactflow", t);
     e.dataTransfer.effectAllowed = "move";
@@ -542,7 +514,6 @@ function FlowBuilderInner() {
     const newId = `node_${nodeIdCounter++}`;
     const n: Node = { id: newId, type: t, position: pos, data: {} };
     setNodes(nds => [...nds, n]);
-    // Auto-open popup for new node
     setTimeout(() => setPopupNodeId(newId), 50);
   }, [rf, setNodes]);
 
@@ -587,7 +558,6 @@ function FlowBuilderInner() {
 
   return (
     <div className="flex h-screen flex-col" style={{ background: "#f1f5f9" }}>
-      {/* Topbar */}
       <div className="flex items-center justify-between border-b border-gray-200 bg-white px-5 py-3 shadow-sm flex-shrink-0">
         <div className="flex items-center gap-3">
           <button onClick={() => router.push("/flows")}
@@ -625,7 +595,6 @@ function FlowBuilderInner() {
       )}
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Left palette */}
         <div className="w-60 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col">
           <div className="px-4 py-3 border-b border-gray-100">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2.5">Node Palette</p>
@@ -657,7 +626,6 @@ function FlowBuilderInner() {
           </div>
         </div>
 
-        {/* Canvas */}
         <div className="flex-1 relative" onDrop={onDrop} onDragOver={onDragOver}>
           {nodes.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
@@ -666,7 +634,7 @@ function FlowBuilderInner() {
                   <Bot className="h-10 w-10 text-gray-300" />
                 </div>
                 <p className="font-bold text-gray-400">Drag nodes from the left to start</p>
-                <p className="text-sm text-gray-300 mt-1">Click a node to configure it · Hover edges to delete</p>
+                <p className="text-sm text-gray-300 mt-1">Click a node to configure · Hover edges to delete</p>
               </div>
             </div>
           )}
@@ -689,7 +657,6 @@ function FlowBuilderInner() {
         </div>
       </div>
 
-      {/* Popup modal — rendered at page level so it's truly on top */}
       {popupNode && popupDef && (
         <NodePopup
           key={popupNodeId!}
@@ -706,7 +673,6 @@ function FlowBuilderInner() {
   );
 }
 
-/* ─── Palette Item ───────────────────────────────────────────────── */
 function PaletteItem({ def, onDragStart }: { def: NodeDef; onDragStart: (e: React.DragEvent, t: string) => void }) {
   return (
     <div draggable onDragStart={e => onDragStart(e, def.type)}
@@ -721,9 +687,6 @@ function PaletteItem({ def, onDragStart }: { def: NodeDef; onDragStart: (e: Reac
     </div>
   );
 }
-
-// Need React import for useRef
-import React from "react";
 
 export default function FlowBuilderPage() {
   return <ReactFlowProvider><FlowBuilderInner /></ReactFlowProvider>;
