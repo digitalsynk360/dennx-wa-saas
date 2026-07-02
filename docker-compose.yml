@@ -1,7 +1,7 @@
 services:
 
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: limbu_postgres
     restart: unless-stopped
     environment:
@@ -52,12 +52,6 @@ services:
       - backend
     networks:
       - limbu_net
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
 
   nginx:
     image: nginx:alpine
