@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
 
   postgres:
@@ -20,21 +18,6 @@ services:
       timeout: 5s
       retries: 5
 
-  redis:
-    image: redis:7-alpine
-    container_name: limbu_redis
-    restart: unless-stopped
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
-    volumes:
-      - redis_data:/data
-    networks:
-      - limbu_net
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   backend:
     build:
       context: ./backend
@@ -44,8 +27,6 @@ services:
     env_file: .env.production
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     networks:
       - limbu_net
@@ -106,7 +87,6 @@ services:
 
 volumes:
   postgres_data:
-  redis_data:
   backend_logs:
   certbot_www:
   certbot_certs:
