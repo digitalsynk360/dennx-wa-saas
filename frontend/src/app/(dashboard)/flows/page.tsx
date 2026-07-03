@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { api } from "@/lib/api";
 import type { FlowListResponse, FlowResponse } from "@/types/chatbot";
 
@@ -52,8 +53,8 @@ export default function FlowsPage() {
   return (
     <>
       <Topbar title="Flows" />
-      <div className="p-6">
-        <div className="mb-4 flex items-center justify-between">
+      <div className="p-4 sm:p-6">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-semibold">Flow Builder</h2>
             <p className="text-sm text-muted-foreground">Design multi-step conversation flows visually</p>
@@ -74,22 +75,21 @@ export default function FlowsPage() {
             {flows.map((flow) => (
               <div key={flow.id} className="rounded-lg border border-border bg-white p-4">
                 <div className="flex items-start justify-between">
-                  <div>
-                    <Link href={`/flows/${flow.id}`} className="font-medium hover:underline">{flow.name}</Link>
+                  <div className="min-w-0">
+                    <Link href={`/flows/${flow.id}`} className="font-medium hover:underline truncate block">{flow.name}</Link>
                     <p className="text-xs text-muted-foreground mt-0.5">{flow.nodes.length} nodes · v{flow.version}</p>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => handleDelete(flow.id)} className="text-red-600 hover:bg-red-50">
+                  <Button variant="ghost" size="sm" onClick={() => handleDelete(flow.id)} className="text-red-600 hover:bg-red-50 flex-shrink-0">
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
                 <div className="mt-3 flex items-center justify-between">
                   <span className="text-xs text-muted-foreground capitalize">{flow.trigger_type} trigger</span>
-                  <button
-                    onClick={() => handleToggle(flow)}
-                    className={`relative h-5 w-9 rounded-full transition-colors ${flow.is_active ? "bg-primary" : "bg-gray-300"}`}
-                  >
-                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${flow.is_active ? "translate-x-4" : "translate-x-0.5"}`} />
-                  </button>
+                  <Switch
+                    size="sm"
+                    checked={flow.is_active}
+                    onCheckedChange={() => handleToggle(flow)}
+                  />
                 </div>
               </div>
             ))}

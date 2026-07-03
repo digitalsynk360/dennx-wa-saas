@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Alert } from "@/components/ui/alert";
+import { Switch } from "@/components/ui/switch";
 import { api } from "@/lib/api";
 import type { NotificationPreferences } from "@/types/billing";
 
@@ -39,18 +40,17 @@ export function NotificationsTab() {
       {error && <Alert variant="destructive" className="mb-4">{error}</Alert>}
       <div className="rounded-lg border border-border bg-white divide-y divide-border">
         {TOGGLES.map((t) => (
-          <div key={t.key} className="flex items-center justify-between p-4">
-            <div>
+          <div key={t.key} className="flex items-center justify-between gap-4 p-4">
+            <div className="min-w-0">
               <p className="font-medium text-sm">{t.label}</p>
               <p className="text-xs text-muted-foreground">{t.description}</p>
             </div>
-            <button
-              onClick={() => handleToggle(t.key)}
+            <Switch
+              size="sm"
+              checked={Boolean(prefs?.[t.key])}
+              onCheckedChange={() => handleToggle(t.key)}
               disabled={!prefs}
-              className={`relative h-5 w-9 flex-shrink-0 rounded-full transition-colors ${prefs?.[t.key] ? "bg-primary" : "bg-gray-300"}`}
-            >
-              <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${prefs?.[t.key] ? "translate-x-4" : "translate-x-0.5"}`} />
-            </button>
+            />
           </div>
         ))}
       </div>

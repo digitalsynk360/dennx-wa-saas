@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { Bot, Plus, Trash2 } from "lucide-react";
+import { Bot, GripVertical, Plus, Trash2 } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -8,108 +8,138 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { api } from "@/lib/api";
-import type { ChatbotRuleResponse } from "@/types/chatbot";
+import type { ChatbotRuleResponse, FlowListResponse, FlowResponse } from "@/types/chatbot";
 
 export default function ChatbotPage() {
   const [rules, setRules] = useState<ChatbotRuleResponse[]>([]);
+  const [flows, setFlows] = useState<FlowResponse[]>([]);
   const [error, setError] = useState<string | null>(null);
-
   const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", keywords: "", match_type: "contains", reply_text: "" });
   const [saving, setSaving] = useState(false);
+
+  // form state
+  const [name, setName] = useState("");
+  const [keywords, setKeywords] = useState("");
+  const [matchType, setMatchType] = useState("contains");
+  const [replyText, setReplyText] = useState("");
+  const [flowId, setFlowId] = useState("");
 
   const load = useCallback(async () => {
     try {
-      const { data } = await api.get<ChatbotRuleResponse[]>("/chatbot/rules");
-      setRules(data);
-    } catch { setError("Failed to load chatbot rules"); }
+      const [rulesRes, flowsRes] = await Promise.all([
+        api.get<ChatbotRuleResponse[]>("/chatbot/rules"),
+        api.get<FlowListResponse>("/flows"),
+      ]);
+      setRules(rulesRes.data);
+      setFlows(flowsRes.data.items);
+    } catch {
+      setError("Failed to load chatbot rules");
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
+  const resetForm = () => {
+    setName(""); setKeywords(""); setMatchType("contains");
+    setReplyText(""); setFlowId("");
+  };
+
   const handleCreate = async () => {
-    if (!form.name || !form.keywords || !form.reply_text) return;
+    if (!keywords || (!replyText && !flowId)) return;
     setSaving(true);
     try {
       await api.post("/chatbot/rules", {
-        name: form.name,
-        keywords: form.keywords.split(",").map((k) => k.trim()).filter(Boolean),
-        match_type: form.match_type,
-        reply_text: form.reply_text,
-        priority: rules.length,
-        is_active: true,
+        name: name || keywords.split(",")[0].trim(),
+        keywords: keywords.split(",").map((k) => k.trim()).filter(Boolean),
+        match_type: matchType,
+        reply_text: replyText || null,
+        flow_id: flowId || null,
       });
       setModalOpen(false);
-      setForm({ name: "", keywords: "", match_type: "contains", reply_text: "" });
+      resetForm();
       await load();
-    } catch { setError("Failed to create rule"); }
-    finally { setSaving(false); }
+    } catch {
+      setError("Failed to create rule");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleToggle = async (rule: ChatbotRuleResponse) => {
     try {
       await api.patch(`/chatbot/rules/${rule.id}`, { is_active: !rule.is_active });
       await load();
-    } catch { setError("Failed to update rule"); }
+    } catch {
+      setError("Failed to update rule");
+    }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this rule?")) return;
-    try { await api.delete(`/chatbot/rules/${id}`); await load(); }
-    catch { setError("Failed to delete rule"); }
+    try {
+      await api.delete(`/chatbot/rules/${id}`);
+      await load();
+    } catch {
+      setError("Failed to delete rule");
+    }
   };
 
   return (
     <>
       <Topbar title="Chatbot" />
-      <div className="p-6">
-        <div className="mb-4 flex items-center justify-between">
+      <div className="p-4 sm:p-6">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold">Chatbot Rules</h2>
-            <p className="text-sm text-muted-foreground">Auto-reply to incoming WhatsApp messages based on keywords</p>
+            <h2 className="text-lg font-semibold">Keyword Rules</h2>
+            <p className="text-sm text-muted-foreground">
+              Auto-reply or trigger a flow when a message matches keywords
+            </p>
           </div>
-          <Button onClick={() => setModalOpen(true)}><Plus className="h-4 w-4" /> Add Rule</Button>
+          <Button onClick={() => setModalOpen(true)}>
+            <Plus className="h-4 w-4" /> New Rule
+          </Button>
         </div>
 
         {error && <Alert variant="destructive" className="mb-4">{error}</Alert>}
 
-        <Alert className="mb-4">
-          <strong>How it works:</strong> When a contact sends a message, the bot checks rules in priority order (highest first). First matching rule sends the reply automatically.
-        </Alert>
-
         {rules.length === 0 ? (
           <div className="rounded-lg border border-border bg-white p-12 text-center">
             <Bot className="mx-auto mb-3 h-12 w-12 text-muted-foreground" />
-            <p className="font-medium">No chatbot rules yet</p>
-            <p className="text-sm text-muted-foreground">Add your first rule to start automating replies</p>
+            <p className="font-medium">No rules yet</p>
+            <p className="text-sm text-muted-foreground">
+              Create a rule to automatically reply to common questions
+            </p>
           </div>
         ) : (
           <div className="space-y-2">
             {rules.map((rule) => (
-              <div key={rule.id} className="flex items-center justify-between rounded-lg border border-border bg-white p-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium">{rule.name}</p>
-                    <span className="rounded bg-muted px-2 py-0.5 text-xs">{rule.match_type}</span>
-                    {!rule.is_active && <span className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-500">Inactive</span>}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Keywords: {rule.keywords.join(", ")}
+              <div
+                key={rule.id}
+                className="flex items-center gap-3 rounded-lg border border-border bg-white p-4"
+              >
+                <GripVertical className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{rule.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {rule.keywords.join(", ")} · {rule.match_type}
+                    {rule.flow_id ? " · triggers flow" : " · text reply"}
                   </p>
-                  <p className="text-sm mt-1 text-muted-foreground truncate max-w-lg">{rule.reply_text}</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleToggle(rule)}
-                    className={`relative h-5 w-9 rounded-full transition-colors ${rule.is_active ? "bg-primary" : "bg-gray-300"}`}
-                  >
-                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${rule.is_active ? "translate-x-4" : "translate-x-0.5"}`} />
-                  </button>
-                  <Button variant="ghost" size="sm" onClick={() => handleDelete(rule.id)} className="text-red-600 hover:bg-red-50">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+                <Switch
+                  size="sm"
+                  checked={rule.is_active}
+                  onCheckedChange={() => handleToggle(rule)}
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleDelete(rule.id)}
+                  className="flex-shrink-0 text-red-600 hover:bg-red-50"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </div>
             ))}
           </div>
@@ -117,39 +147,56 @@ export default function ChatbotPage() {
       </div>
 
       <Dialog open={modalOpen} onClose={() => setModalOpen(false)}>
-        <DialogHeader><DialogTitle>Add Chatbot Rule</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>New Chatbot Rule</DialogTitle></DialogHeader>
         <DialogContent>
           <div className="space-y-1.5">
-            <Label>Rule Name *</Label>
-            <Input placeholder="Greeting" value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} />
+            <Label>Rule Name</Label>
+            <Input
+              placeholder="Pricing question"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
           </div>
           <div className="space-y-1.5">
-            <Label>Keywords * (comma-separated)</Label>
-            <Input placeholder="hi, hello, hey" value={form.keywords} onChange={(e) => setForm(f => ({ ...f, keywords: e.target.value }))} />
+            <Label>Keywords * (comma separated)</Label>
+            <Input
+              placeholder="price, pricing, cost"
+              value={keywords}
+              onChange={(e) => setKeywords(e.target.value)}
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Match Type</Label>
-            <Select value={form.match_type} onChange={(e) => setForm(f => ({ ...f, match_type: e.target.value }))}>
+            <Select value={matchType} onChange={(e) => setMatchType(e.target.value)}>
               <option value="contains">Contains</option>
               <option value="exact">Exact match</option>
               <option value="starts_with">Starts with</option>
-              <option value="regex">Regex</option>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Reply Text *</Label>
-            <textarea
-              className="w-full rounded-md border border-border px-3 py-2 text-sm min-h-[80px]"
-              placeholder="Hi! Welcome to our business. How can we help you today?"
-              value={form.reply_text}
-              onChange={(e) => setForm(f => ({ ...f, reply_text: e.target.value }))}
+            <Label>Reply Text</Label>
+            <Input
+              placeholder="Our pricing starts at ₹999/month"
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
             />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Or Trigger Flow</Label>
+            <Select value={flowId} onChange={(e) => setFlowId(e.target.value)}>
+              <option value="">None</option>
+              {flows.map((f) => (
+                <option key={f.id} value={f.id}>{f.name}</option>
+              ))}
+            </Select>
           </div>
         </DialogContent>
         <DialogFooter>
-          <Button variant="outline" onClick={() => setModalOpen(false)}>Cancel</Button>
-          <Button onClick={handleCreate} disabled={saving || !form.name || !form.keywords || !form.reply_text}>
-            {saving ? "Adding..." : "Add Rule"}
+          <Button variant="outline" onClick={() => { setModalOpen(false); resetForm(); }}>
+            Cancel
+          </Button>
+          <Button onClick={handleCreate} disabled={saving || !keywords || (!replyText && !flowId)}>
+            {saving ? "Creating..." : "Create Rule"}
           </Button>
         </DialogFooter>
       </Dialog>
