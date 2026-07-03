@@ -5,7 +5,7 @@ import { AuthProvider } from "@/context/auth-context";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Limbu WA SaaS",
+  title: "Deenx AI",
   description: "WhatsApp Business automation platform",
 };
 

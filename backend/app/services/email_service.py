@@ -19,7 +19,7 @@ logger = get_logger(__name__)
 def _send_sync(to_email: str, subject: str, html_body: str) -> None:
     msg = EmailMessage()
     msg["Subject"] = subject
-    msg["From"]    = settings.FROM_EMAIL or "no-reply@limbu.ai"
+    msg["From"]    = settings.FROM_EMAIL or "o-reply@deenxconsultancy.com"
     msg["To"]      = to_email
     msg.set_content("This email requires an HTML-capable client.")
     msg.add_alternative(html_body, subtype="html")
@@ -61,7 +61,7 @@ async def send_verification_email(to_email: str, token: str) -> None:
     verify_url = f"{app_url}/verify-email?token={token}"
     await send_email(
         to_email,
-        "Verify your Limbu WA SaaS account",
+        "Verify your Deenx AI account",
         EmailTemplates.verify_email("there", verify_url),
     )
 
@@ -72,7 +72,7 @@ async def send_password_reset_email(to_email: str, token: str) -> None:
     reset_url = f"{app_url}/reset-password?token={token}"
     await send_email(
         to_email,
-        "Reset your Limbu WA SaaS password",
+        "Reset your Deenx AI password",
         EmailTemplates.forgot_password("there", reset_url),
     )
 
@@ -83,7 +83,7 @@ async def send_welcome(to_email: str, full_name: str) -> bool:
     app_url = getattr(settings, "APP_URL", None) or getattr(settings, "FRONTEND_URL", "http://localhost:3000")
     return await send_email(
         to_email,
-        "Welcome to Limbu WA SaaS!",
+        "Welcome to Deenx AI!",
         EmailTemplates.welcome(full_name, app_url),
     )
 

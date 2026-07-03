@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     )
 
     # ---------- Application ----------
-    APP_NAME: str = "Limbu WA SaaS"
+    APP_NAME: str = "Deenx AI"
     ENVIRONMENT: Literal["development", "staging", "production"] = "development"
     DEBUG: bool = True
 
@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     SMTP_USERNAME: str = ""
     SMTP_PASSWORD: str = ""
     FROM_EMAIL: str = ""
-    FROM_NAME: str = "Limbu WA SaaS"
+    FROM_NAME: str = "Deenx AI"
     APP_URL: str = "http://localhost:3000"
 
     # ---------- CORS ----------

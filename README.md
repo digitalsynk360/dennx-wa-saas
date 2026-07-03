@@ -1,4 +1,4 @@
-# Limbu WA SaaS
+# Deenx AI
 
 Multi-tenant WhatsApp Business platform — fully decoupled frontend
 (Next.js 15 / TypeScript) and backend (FastAPI / Python 3.14),

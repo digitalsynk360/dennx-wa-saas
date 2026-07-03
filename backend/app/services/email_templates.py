@@ -21,7 +21,7 @@ _BASE = """
   <tr>
     <td style="padding:0 0 24px 0;text-align:center;">
       <div style="display:inline-block;background:#000;border-radius:12px;padding:12px 24px;">
-        <span style="color:#fff;font-size:20px;font-weight:700;letter-spacing:-0.5px;">⚡ Limbu WA SaaS</span>
+        <span style="color:#fff;font-size:20px;font-weight:700;letter-spacing:-0.5px;">⚡ Deenx AI</span>
       </div>
     </td>
   </tr>
@@ -36,7 +36,7 @@ _BASE = """
   <!-- Footer -->
   <tr>
     <td style="padding:24px 0;text-align:center;color:#71717a;font-size:13px;line-height:1.6;">
-      <p style="margin:0 0 4px 0;">Limbu WA SaaS · WhatsApp Business Automation</p>
+      <p style="margin:0 0 4px 0;">Deenx AI · WhatsApp Business Automation</p>
       <p style="margin:0;color:#a1a1aa;font-size:12px;">If you didn't request this email, you can safely ignore it.</p>
     </td>
   </tr>
@@ -76,7 +76,7 @@ class EmailTemplates:
     def welcome(full_name: str, app_url: str) -> str:
         content = f"""
         {_badge("Welcome aboard! 🎉", "#15803d", "#dcfce7")}
-        {_h1(f"Hi {full_name}, welcome to Limbu WA SaaS!")}
+        {_h1(f"Hi {full_name}, welcome to Deenx AI!")}
         {_p("Your account is ready. You can now connect your WhatsApp Business account and start automating your conversations.")}
         {_divider_section([
             ("🤖", "Flow Builder", "Create automated conversation flows with 56+ node types"),
@@ -88,7 +88,7 @@ class EmailTemplates:
         </div>
         {_p("Need help? Reply to this email anytime.", muted=True)}
         """
-        return _BASE.format(title="Welcome to Limbu WA SaaS", content=content)
+        return _BASE.format(title="Welcome to Deenx AI", content=content)
 
     @staticmethod
     def verify_email(full_name: str, verify_url: str) -> str:
@@ -153,7 +153,7 @@ class EmailTemplates:
         content = f"""
         {_badge("Team invitation", "#7c3aed", "#f5f3ff")}
         {_h1(f"You're invited to join {workspace_name}")}
-        {_p(f"Hi {invitee_name}, <strong>{inviter_name}</strong> has invited you to join <strong>{workspace_name}</strong> on Limbu WA SaaS.")}
+        {_p(f"Hi {invitee_name}, <strong>{inviter_name}</strong> has invited you to join <strong>{workspace_name}</strong> on Deenx AI.")}
         <div style="background:#f9fafb;border-radius:12px;padding:20px;margin:24px 0;border:1px solid #e4e4e7;">
           <table width="100%" cellpadding="0" cellspacing="0">
             {_info_row("Workspace", workspace_name)}

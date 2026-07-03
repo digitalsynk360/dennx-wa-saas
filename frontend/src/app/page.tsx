@@ -14,7 +14,7 @@ export default function Home() {
       style={{ backgroundColor: "hsl(var(--teal-deep))" }}
     >
       <div>
-        <h1 className="text-4xl font-bold">Limbu WA SaaS</h1>
+        <h1 className="text-4xl font-bold">Deenx AI</h1>
         <p className="mt-2 text-white/80">
           WhatsApp Business automation platform — authentication is ready.
         </p>

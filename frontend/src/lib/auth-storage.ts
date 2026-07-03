@@ -5,9 +5,9 @@
  * CORS/cookie config — revisit if XSS-hardening becomes a priority
  * before launch.
  */
-const ACCESS_TOKEN_KEY = "limbu_access_token";
-const REFRESH_TOKEN_KEY = "limbu_refresh_token";
-const ACTIVE_WORKSPACE_KEY = "limbu_active_workspace_id";
+const ACCESS_TOKEN_KEY = "deenx_access_token";
+const REFRESH_TOKEN_KEY = "deenx_refresh_token";
+const ACTIVE_WORKSPACE_KEY = "deenx_active_workspace_id";
 
 export function getAccessToken(): string | null {
   if (typeof window === "undefined") return null;

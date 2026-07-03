@@ -1,4 +1,4 @@
-# Limbu WA SaaS — Shuru se Deployment tak (Step by Step Guide)
+# Deenx AI — Shuru se Deployment tak (Step by Step Guide)
 
 **Phase 1-13 complete hai:** Authentication, Workspaces, Sub Admins,
 Inbox (real-time chat), WhatsApp Connect, Contacts, Campaigns,
