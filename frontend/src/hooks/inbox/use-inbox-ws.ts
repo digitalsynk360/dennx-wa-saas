@@ -2,15 +2,28 @@
 import { useEffect, useRef, useCallback } from "react";
 import { getActiveWorkspaceId } from "@/lib/auth-storage";
 
+const MAX_RETRIES = 8;
+
 export function useInboxWebSocket(onMessage: (event: { event: string; data: unknown }) => void) {
   const wsRef = useRef<WebSocket | null>(null);
+  const retriesRef = useRef(0);
+  const stoppedRef = useRef(false);
 
   const connect = useCallback(() => {
+    if (stoppedRef.current) return;
     const workspaceId = getActiveWorkspaceId();
     if (!workspaceId) return;
 
     const wsUrl = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000/api/v1/ws";
     const ws = new WebSocket(`${wsUrl}/${workspaceId}`);
+    let pingInterval: ReturnType<typeof setInterval> | null = null;
+
+    ws.onopen = () => {
+      retriesRef.current = 0;
+      pingInterval = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) ws.send("ping");
+      }, 25000);
+    };
 
     ws.onmessage = (e) => {
       try {
@@ -20,23 +33,26 @@ export function useInboxWebSocket(onMessage: (event: { event: string; data: unkn
     };
 
     ws.onclose = () => {
-      // Reconnect after 3s
-      setTimeout(connect, 3000);
-    };
-
-    ws.onopen = () => {
-      // Send periodic ping to keep alive
-      const ping = setInterval(() => {
-        if (ws.readyState === WebSocket.OPEN) ws.send("ping");
-      }, 25000);
-      ws.onclose = () => { clearInterval(ping); setTimeout(connect, 3000); };
+      if (pingInterval) clearInterval(pingInterval);
+      if (stoppedRef.current) return;
+      retriesRef.current += 1;
+      if (retriesRef.current > MAX_RETRIES) {
+        console.warn("WebSocket: max retries reached, stopping reconnect.");
+        return;
+      }
+      const delay = Math.min(3000 * 2 ** (retriesRef.current - 1), 60000);
+      setTimeout(connect, delay);
     };
 
     wsRef.current = ws;
   }, [onMessage]);
 
   useEffect(() => {
+    stoppedRef.current = false;
     connect();
-    return () => { wsRef.current?.close(); };
+    return () => {
+      stoppedRef.current = true;
+      wsRef.current?.close();
+    };
   }, [connect]);
 }
