@@ -344,7 +344,7 @@ export default function InboxPage() {
         {selectedConv ? (
           <div className="flex flex-1 flex-col min-w-0">
             {/* Chat header */}
-            <div className="flex items-center justify-between border-b border-border bg-white px-3 sm:px-4 py-3 flex-shrink-0 gap-2">
+            <div className="flex flex-col gap-2 border-b border-border bg-white px-3 sm:px-4 py-2.5 sm:py-3 flex-shrink-0 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-center gap-1.5">
                 <button
                   onClick={() => setSelectedId(null)}
@@ -375,7 +375,7 @@ export default function InboxPage() {
                 </p>
                 </div>
               </div>
-              <div className="flex flex-shrink-0 gap-2">
+              <div className="flex flex-wrap gap-2 sm:flex-shrink-0 sm:justify-end">
                 {/* Intervene — only show when bot is handling */}
                 {selectedConv.handling === "bot" && (
                   <Button

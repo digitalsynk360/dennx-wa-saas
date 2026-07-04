@@ -43,7 +43,7 @@ export default function AnalyticsPage() {
   return (
     <>
       <Topbar title="Analytics" />
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <div className="mb-4 flex justify-end">
           <Select value={period} onChange={(e) => setPeriod(Number(e.target.value))} className="w-40">
             {PERIOD_OPTIONS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
@@ -88,6 +88,7 @@ export default function AnalyticsPage() {
               {data.campaign_performance.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-8 text-center">No campaigns in this period yet.</p>
               ) : (
+                <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left">
                   <thead className="text-xs uppercase text-muted-foreground border-b border-border">
                     <tr>
@@ -110,6 +111,7 @@ export default function AnalyticsPage() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               )}
             </div>
           </>

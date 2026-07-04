@@ -89,8 +89,8 @@ export default function TemplatesPage() {
   return (
     <>
       <Topbar title="Templates" />
-      <div className="p-6">
-        <div className="mb-4 flex items-center justify-between">
+      <div className="p-4 sm:p-6">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-semibold">Message Templates</h2>
             <p className="text-sm text-muted-foreground">Templates require Meta approval before use in campaigns.</p>
@@ -107,6 +107,7 @@ export default function TemplatesPage() {
         {success && <Alert variant="success" className="mb-4">{success}</Alert>}
 
         <div className="overflow-hidden rounded-lg border border-border bg-white">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="bg-muted/50 text-xs uppercase text-muted-foreground border-b border-border">
               <tr>
@@ -146,6 +147,7 @@ export default function TemplatesPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
 
@@ -158,7 +160,7 @@ export default function TemplatesPage() {
               onChange={(e) => setForm(f => ({ ...f, name: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_") }))} />
             <p className="text-xs text-muted-foreground">Lowercase + underscores only.</p>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Category *</Label>
               <Select value={form.category} onChange={(e) => setForm(f => ({ ...f, category: e.target.value }))}>

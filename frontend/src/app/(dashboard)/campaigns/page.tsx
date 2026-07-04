@@ -96,7 +96,7 @@ export default function CampaignsPage() {
   return (
     <>
       <Topbar title="Campaigns" />
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         {error && <Alert variant="destructive" className="mb-4">{error}</Alert>}
         {success && <Alert variant="success" className="mb-4">{success}</Alert>}
 
@@ -105,6 +105,7 @@ export default function CampaignsPage() {
         </div>
 
         <div className="overflow-hidden rounded-lg border border-border bg-white">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="bg-muted/50 text-xs uppercase text-muted-foreground border-b border-border">
               <tr>
@@ -154,6 +155,7 @@ export default function CampaignsPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
 
