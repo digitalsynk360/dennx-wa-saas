@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
-import { CheckCheck, Send, Sparkles, UserCheck, Users, X } from "lucide-react";
+import { ArrowLeft, CheckCheck, Send, Sparkles, UserCheck, Users, X } from "lucide-react";
 
 import { Topbar } from "@/components/layout/topbar";
 import { Alert } from "@/components/ui/alert";
@@ -247,9 +247,14 @@ export default function InboxPage() {
   return (
     <>
       <Topbar title="Inbox" />
-      <div className="flex h-[calc(100vh-64px)] overflow-hidden">
+      <div className="flex h-[calc(100dvh-56px)] sm:h-[calc(100dvh-64px)] overflow-hidden">
         {/* ── Conversation list ── */}
-        <div className="flex w-80 flex-shrink-0 flex-col border-r border-border bg-white">
+        <div
+          className={cn(
+            "w-full flex-col border-r border-border bg-white md:flex md:w-80 md:flex-shrink-0",
+            selectedId ? "hidden" : "flex"
+          )}
+        >
           {/* Handling tabs */}
           <div className="flex border-b border-border px-2 overflow-x-auto">
             {HANDLING_TABS.map((tab) => (
@@ -339,8 +344,16 @@ export default function InboxPage() {
         {selectedConv ? (
           <div className="flex flex-1 flex-col min-w-0">
             {/* Chat header */}
-            <div className="flex items-center justify-between border-b border-border bg-white px-4 py-3 flex-shrink-0">
-              <div>
+            <div className="flex items-center justify-between border-b border-border bg-white px-3 sm:px-4 py-3 flex-shrink-0 gap-2">
+              <div className="flex min-w-0 items-center gap-1.5">
+                <button
+                  onClick={() => setSelectedId(null)}
+                  className="rounded-md p-1.5 -ml-1 text-muted-foreground hover:bg-muted md:hidden flex-shrink-0"
+                  aria-label="Back to conversations"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                </button>
+                <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <p className="font-semibold">
                     {selectedConv.contact.name || selectedConv.contact.phone}
@@ -360,8 +373,9 @@ export default function InboxPage() {
                     <span className="ml-2 text-green-600">● Agent assigned</span>
                   )}
                 </p>
+                </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-shrink-0 gap-2">
                 {/* Intervene — only show when bot is handling */}
                 {selectedConv.handling === "bot" && (
                   <Button
@@ -488,7 +502,7 @@ export default function InboxPage() {
             )}
           </div>
         ) : (
-          <div className="flex flex-1 items-center justify-center text-muted-foreground">
+          <div className="hidden flex-1 items-center justify-center text-muted-foreground md:flex">
             Select a conversation to start chatting
           </div>
         )}
