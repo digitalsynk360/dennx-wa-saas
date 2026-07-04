@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { format } from "date-fns";
-import { Pause, Play, Plus, X } from "lucide-react";
+import { CheckCircle2, Loader2, Megaphone, Pause, Play, Plus, Search, Send as SendIcon, X } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ export default function CampaignsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState({ name: "", template_id: "" });
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
+  const [contactSearch, setContactSearch] = useState("");
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -43,6 +44,14 @@ export default function CampaignsPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Auto-refresh every 5s while any campaign is active
+  useEffect(() => {
+    const active = campaigns.some((c) => ["running", "sending"].includes(c.status));
+    if (!active) return;
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
+  }, [campaigns, load]);
 
   const openModal = async () => {
     setModalOpen(true);
@@ -100,6 +109,34 @@ export default function CampaignsPage() {
         {error && <Alert variant="destructive" className="mb-4">{error}</Alert>}
         {success && <Alert variant="success" className="mb-4">{success}</Alert>}
 
+        {/* ── Stats ── */}
+        {(() => {
+          const running = campaigns.filter((c) => ["running", "sending"].includes(c.status)).length;
+          const completed = campaigns.filter((c) => c.status === "completed").length;
+          const totalSent = campaigns.reduce((s, c) => s + c.sent_count, 0);
+          const cards = [
+            { icon: Megaphone, label: "Total Campaigns", value: campaigns.length, cls: "bg-purple-100 text-purple-600" },
+            { icon: Loader2, label: "Running", value: running, cls: "bg-blue-100 text-blue-600" },
+            { icon: CheckCircle2, label: "Completed", value: completed, cls: "bg-green-100 text-green-600" },
+            { icon: SendIcon, label: "Messages Sent", value: totalSent, cls: "bg-amber-100 text-amber-600" },
+          ];
+          return (
+            <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {cards.map((s) => (
+                <div key={s.label} className="flex items-center gap-3 rounded-xl border border-border bg-white p-3.5">
+                  <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${s.cls}`}>
+                    <s.icon className="h-4.5 w-4.5 h-[18px] w-[18px]" />
+                  </span>
+                  <span>
+                    <span className="block text-lg font-bold leading-tight">{s.value}</span>
+                    <span className="block text-xs text-muted-foreground">{s.label}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
         <div className="mb-4 flex justify-end">
           <Button onClick={openModal}><Plus className="h-4 w-4" /> New Campaign</Button>
         </div>
@@ -130,7 +167,17 @@ export default function CampaignsPage() {
                     <span className={`rounded px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[c.status] || ""}`}>{c.status}</span>
                   </td>
                   <td className="px-4 py-3">{c.total_count}</td>
-                  <td className="px-4 py-3">{c.sent_count}</td>
+                  <td className="px-4 py-3">
+                    <span className="block">{c.sent_count}</span>
+                    {c.total_count > 0 && ["running", "sending", "paused"].includes(c.status) && (
+                      <span className="mt-1 block h-1.5 w-16 overflow-hidden rounded-full bg-gray-100">
+                        <span
+                          className="block h-full rounded-full bg-primary transition-all"
+                          style={{ width: `${Math.min((c.sent_count / c.total_count) * 100, 100)}%` }}
+                        />
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">{c.delivered_count}</td>
                   <td className="px-4 py-3 text-red-600">{c.failed_count}</td>
                   <td className="px-4 py-3 text-muted-foreground">{format(new Date(c.created_at), "dd MMM, HH:mm")}</td>
@@ -176,10 +223,57 @@ export default function CampaignsPage() {
               <p className="text-xs text-muted-foreground">No approved templates. Create one in Templates first.</p>
             )}
           </div>
+          {form.template_id && (() => {
+            const t = templates.find((x) => x.id === form.template_id);
+            if (!t) return null;
+            return (
+              <div className="rounded-xl bg-[hsl(90,25%,92%)] p-3">
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Preview</p>
+                <div className="ml-auto max-w-[95%] rounded-lg rounded-tr-none bg-[#d9fdd3] px-3 py-2 text-xs text-gray-800 shadow-sm whitespace-pre-wrap">
+                  {t.body_text}
+                  {t.footer_text && <span className="mt-1 block text-[10px] text-gray-500">{t.footer_text}</span>}
+                </div>
+              </div>
+            );
+          })()}
           <div className="space-y-1.5">
             <Label>Contacts * ({selectedContacts.size} selected)</Label>
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={contactSearch}
+                  onChange={(e) => setContactSearch(e.target.value)}
+                  placeholder="Search contacts..."
+                  className="h-8 pl-8 text-sm"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const filtered = contacts.filter((c) =>
+                    (c.name || "").toLowerCase().includes(contactSearch.toLowerCase()) ||
+                    c.phone.includes(contactSearch)
+                  );
+                  const allSelected = filtered.every((c) => selectedContacts.has(c.id));
+                  setSelectedContacts((prev) => {
+                    const next = new Set(prev);
+                    filtered.forEach((c) => (allSelected ? next.delete(c.id) : next.add(c.id)));
+                    return next;
+                  });
+                }}
+                className="whitespace-nowrap rounded-md border border-border px-2 py-1.5 text-xs font-medium hover:bg-muted"
+              >
+                Select all
+              </button>
+            </div>
             <div className="max-h-48 overflow-y-auto rounded-md border border-border p-2 space-y-1">
-              {contacts.map((c) => (
+              {contacts
+                .filter((c) =>
+                  (c.name || "").toLowerCase().includes(contactSearch.toLowerCase()) ||
+                  c.phone.includes(contactSearch)
+                )
+                .map((c) => (
                 <label key={c.id} className="flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted/50 rounded cursor-pointer">
                   <input type="checkbox" checked={selectedContacts.has(c.id)} onChange={() => toggleContact(c.id)} />
                   <span>{c.name || c.phone}</span>

@@ -193,6 +193,32 @@ export default function TemplatesPage() {
             <Input placeholder="Reply STOP to unsubscribe" value={form.footer_text}
               onChange={(e) => setForm(f => ({ ...f, footer_text: e.target.value }))} />
           </div>
+          {/* ── Live WhatsApp Preview ── */}
+          <div className="rounded-xl bg-[hsl(90,25%,92%)] p-3">
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Live Preview</p>
+            <div className="ml-auto max-w-[95%] rounded-lg rounded-tr-none bg-[#d9fdd3] px-3 py-2 text-xs text-gray-800 shadow-sm whitespace-pre-wrap min-h-[2rem]">
+              {form.body_text ? (
+                form.body_text.split(/(\{\{\d+\}\})/g).map((part, i) =>
+                  /^\{\{\d+\}\}$/.test(part) ? (
+                    <span key={i} className="rounded bg-amber-200/80 px-1 font-semibold text-amber-800">{part}</span>
+                  ) : (
+                    <span key={i}>{part}</span>
+                  )
+                )
+              ) : (
+                <span className="text-gray-400">Body text preview yahan dikhega...</span>
+              )}
+              {form.footer_text && <span className="mt-1 block text-[10px] text-gray-500">{form.footer_text}</span>}
+            </div>
+            {(() => {
+              const vars = [...new Set(form.body_text.match(/\{\{\d+\}\}/g) || [])];
+              return vars.length > 0 ? (
+                <p className="mt-1.5 text-[10px] text-muted-foreground">
+                  Variables detected: {vars.join(", ")} — Meta approval ke waqt samples lagenge.
+                </p>
+              ) : null;
+            })()}
+          </div>
         </DialogContent>
         <DialogFooter>
           <Button variant="outline" onClick={() => setModalOpen(false)}>Cancel</Button>
