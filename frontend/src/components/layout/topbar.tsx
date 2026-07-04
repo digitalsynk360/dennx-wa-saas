@@ -1,37 +1,49 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Menu } from "lucide-react";
 
 import { useAuth } from "@/context/auth-context";
 import { cn } from "@/lib/utils";
 
+import { useSidebar } from "./sidebar-context";
+
 /**
- * Top bar: page title (left) + role badge, active workspace name, and
- * a workspace switcher dropdown (right) — matches the reference
- * "Admin  Demo Account" header, extended with a switcher since a user
- * can belong to multiple workspaces (Sub Admins screen).
+ * Top bar: hamburger (mobile) + page title on the left; role badge,
+ * workspace switcher and user name on the right. Non-essential items
+ * collapse away on small screens so nothing overflows.
  */
 export function Topbar({ title }: { title: string }) {
   const { user, workspaces, activeWorkspace, setActiveWorkspaceId } = useAuth();
+  const { setMobileOpen } = useSidebar();
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-border bg-white px-6">
-      <h1 className="text-lg font-semibold text-foreground">{title}</h1>
+    <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b border-border bg-white px-3 sm:h-16 sm:px-6">
+      <div className="flex min-w-0 items-center gap-2">
+        {/* Hamburger — mobile only */}
+        <button
+          onClick={() => setMobileOpen(true)}
+          className="rounded-md p-1.5 text-foreground hover:bg-muted md:hidden"
+          aria-label="Open menu"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+        <h1 className="truncate text-base font-semibold text-foreground sm:text-lg">{title}</h1>
+      </div>
 
-      <div className="flex items-center gap-3">
-        <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-700">
+      <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
+        <span className="hidden rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-700 sm:inline-block">
           {activeWorkspace?.role ?? "Member"}
         </span>
 
         <div className="relative">
           <button
             onClick={() => setOpen((o) => !o)}
-            className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium text-foreground hover:bg-muted"
+            className="flex max-w-[140px] items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium text-foreground hover:bg-muted sm:max-w-[220px]"
           >
-            {activeWorkspace?.name ?? "Select workspace"}
-            {workspaces.length > 1 && <ChevronDown className="h-4 w-4" />}
+            <span className="truncate">{activeWorkspace?.name ?? "Select workspace"}</span>
+            {workspaces.length > 1 && <ChevronDown className="h-4 w-4 flex-shrink-0" />}
           </button>
 
           {open && workspaces.length > 1 && (
@@ -57,7 +69,7 @@ export function Topbar({ title }: { title: string }) {
           )}
         </div>
 
-        <span className="text-sm text-muted-foreground">{user?.full_name}</span>
+        <span className="hidden text-sm text-muted-foreground lg:inline">{user?.full_name}</span>
       </div>
     </header>
   );
