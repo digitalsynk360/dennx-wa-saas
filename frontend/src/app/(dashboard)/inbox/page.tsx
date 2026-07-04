@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
-import { ArrowLeft, CheckCheck, Send, Sparkles, UserCheck, Users, X } from "lucide-react";
+import { ArrowLeft, CheckCheck, Plus, Send, Sparkles, Tag as TagIcon, Trash2, UserCheck, Users, X, Zap } from "lucide-react";
 
 import { Topbar } from "@/components/layout/topbar";
 import { Alert } from "@/components/ui/alert";
@@ -18,6 +18,7 @@ import type {
   MessageListResponse,
   MessageResponse,
 } from "@/types/inbox";
+import type { ContactResponse, TagResponse } from "@/types/contacts";
 import type { SuggestReplyResponse } from "@/types/ai";
 
 // Agent from /conversations/agents
@@ -58,6 +59,12 @@ export default function InboxPage() {
 
   // Compose
   const [sendText, setSendText] = useState("");
+  const [qrOpen, setQrOpen] = useState(false);
+  const [quickReplies, setQuickReplies] = useState<string[]>([]);
+  const [contactDetail, setContactDetail] = useState<ContactResponse | null>(null);
+  const [allTags, setAllTags] = useState<TagResponse[]>([]);
+  const [tagPickerOpen, setTagPickerOpen] = useState(false);
+  const [newTagName, setNewTagName] = useState("");
   const [sending, setSending] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
 
@@ -115,6 +122,74 @@ export default function InboxPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // ─── Quick replies (saved on this device) ────────────────────────────
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("deenx_quick_replies");
+      if (raw) setQuickReplies(JSON.parse(raw));
+    } catch {}
+  }, []);
+
+  const saveQuickReplies = (list: string[]) => {
+    setQuickReplies(list);
+    try { localStorage.setItem("deenx_quick_replies", JSON.stringify(list)); } catch {}
+  };
+
+  const addQuickReply = () => {
+    const text = sendText.trim();
+    if (!text || quickReplies.includes(text)) return;
+    saveQuickReplies([...quickReplies, text]);
+  };
+
+  const removeQuickReply = (idx: number) => {
+    saveQuickReplies(quickReplies.filter((_, i) => i !== idx));
+  };
+
+  // ─── Contact detail + tags for right panel ───────────────────────────
+  const loadContactDetail = useCallback(async (contactId: string) => {
+    try {
+      const { data } = await api.get<ContactResponse>(`/contacts/${contactId}`);
+      setContactDetail(data);
+    } catch { setContactDetail(null); }
+  }, []);
+
+  useEffect(() => {
+    const cid = selectedConv?.contact.id;
+    if (cid) loadContactDetail(cid);
+    else setContactDetail(null);
+    setTagPickerOpen(false);
+  }, [selectedConv?.contact.id, loadContactDetail]);
+
+  const openTagPicker = async () => {
+    try {
+      const { data } = await api.get<TagResponse[]>("/tags");
+      setAllTags(data);
+    } catch {}
+    setTagPickerOpen((v) => !v);
+  };
+
+  const attachTag = async (tagId: string) => {
+    if (!contactDetail) return;
+    try {
+      const { data } = await api.post<ContactResponse>(
+        `/contacts/${contactDetail.id}/tags`,
+        { tag_ids: [tagId] }
+      );
+      setContactDetail(data);
+    } catch { setError("Failed to add tag"); }
+  };
+
+  const createAndAttachTag = async () => {
+    const name = newTagName.trim();
+    if (!name || !contactDetail) return;
+    try {
+      const { data: tag } = await api.post<TagResponse>("/tags", { name, color: null });
+      setNewTagName("");
+      await attachTag(tag.id);
+      setAllTags((t) => [...t, tag]);
+    } catch { setError("Failed to create tag"); }
+  };
 
   // ─── Real-time WebSocket ──────────────────────────────────────────────
   useInboxWebSocket(
@@ -466,7 +541,54 @@ export default function InboxPage() {
                 Conversation resolved. Send a template to re-engage.
               </div>
             ) : (
-              <div className="flex items-center gap-2 border-t border-border bg-white p-3 flex-shrink-0">
+              <div className="relative border-t border-border bg-white flex-shrink-0">
+                {qrOpen && (
+                  <div className="absolute bottom-full left-2 right-2 z-20 mb-1 max-h-56 overflow-y-auto rounded-xl border border-border bg-white p-2 shadow-lg sm:left-3 sm:right-auto sm:w-80">
+                    <div className="mb-1.5 flex items-center justify-between px-1">
+                      <p className="text-xs font-semibold text-muted-foreground">Quick Replies</p>
+                      <button
+                        onClick={addQuickReply}
+                        disabled={!sendText.trim()}
+                        className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-primary hover:bg-primary/10 disabled:opacity-40"
+                        title="Save current text as quick reply"
+                      >
+                        <Plus className="h-3 w-3" /> Save current
+                      </button>
+                    </div>
+                    {quickReplies.length === 0 ? (
+                      <p className="px-1 pb-1 text-xs text-muted-foreground">
+                        Koi quick reply nahi. Message likho aur &quot;Save current&quot; dabao.
+                      </p>
+                    ) : (
+                      quickReplies.map((qr, i) => (
+                        <div key={i} className="group flex items-start gap-1 rounded-lg px-1.5 py-1 hover:bg-muted">
+                          <button
+                            onClick={() => { setSendText(qr); setQrOpen(false); }}
+                            className="flex-1 truncate text-left text-sm"
+                            title={qr}
+                          >
+                            {qr}
+                          </button>
+                          <button
+                            onClick={() => removeQuickReply(i)}
+                            className="rounded p-0.5 text-muted-foreground opacity-0 hover:text-red-600 group-hover:opacity-100"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              <div className="flex items-center gap-2 p-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setQrOpen((v) => !v)}
+                  title="Quick Replies"
+                  className={cn(qrOpen && "border-primary text-primary")}
+                >
+                  <Zap className="h-4 w-4" />
+                </Button>
                 <Button
                   variant="outline"
                   onClick={handleSuggestReply}
@@ -499,6 +621,7 @@ export default function InboxPage() {
                   <Send className="h-4 w-4" />
                 </Button>
               </div>
+              </div>
             )}
           </div>
         ) : (
@@ -511,6 +634,68 @@ export default function InboxPage() {
         {selectedConv && (
           <div className="hidden w-64 flex-shrink-0 border-l border-border bg-white p-4 lg:block overflow-y-auto">
             <h3 className="font-semibold text-sm mb-3">Conversation Info</h3>
+
+            {/* ── Contact Tags ── */}
+            <div className="mb-4">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                  <TagIcon className="h-3.5 w-3.5" /> TAGS
+                </p>
+                <button
+                  onClick={openTagPicker}
+                  className="flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-xs font-medium text-primary hover:bg-primary/10"
+                >
+                  <Plus className="h-3 w-3" /> Add
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {contactDetail?.tags.length ? (
+                  contactDetail.tags.map((t) => (
+                    <span
+                      key={t.id}
+                      className="rounded-full px-2 py-0.5 text-xs font-medium"
+                      style={{
+                        backgroundColor: (t.color || "#16a34a") + "1a",
+                        color: t.color || "#16a34a",
+                      }}
+                    >
+                      {t.name}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-xs text-muted-foreground">No tags</span>
+                )}
+              </div>
+              {tagPickerOpen && (
+                <div className="mt-2 rounded-lg border border-border bg-muted/40 p-2">
+                  <div className="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto">
+                    {allTags
+                      .filter((t) => !contactDetail?.tags.some((ct) => ct.id === t.id))
+                      .map((t) => (
+                        <button
+                          key={t.id}
+                          onClick={() => attachTag(t.id)}
+                          className="rounded-full border border-border bg-white px-2 py-0.5 text-xs hover:border-primary hover:text-primary"
+                        >
+                          + {t.name}
+                        </button>
+                      ))}
+                  </div>
+                  <div className="mt-2 flex gap-1.5">
+                    <Input
+                      value={newTagName}
+                      onChange={(e) => setNewTagName(e.target.value)}
+                      placeholder="New tag..."
+                      className="h-7 text-xs"
+                      onKeyDown={(e) => e.key === "Enter" && createAndAttachTag()}
+                    />
+                    <Button size="sm" className="h-7 px-2 text-xs" onClick={createAndAttachTag} disabled={!newTagName.trim()}>
+                      Add
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Status</span>

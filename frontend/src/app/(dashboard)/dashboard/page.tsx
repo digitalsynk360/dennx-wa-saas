@@ -3,17 +3,19 @@
 
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend,
+  ResponsiveContainer, Legend, PieChart, Pie, Cell,
 } from "recharts";
 import {
   MessageSquare, Users, Zap, Clock,
   TrendingUp, TrendingDown, Bot, CheckCircle,
-  Send, Activity,
+  Send, Activity, ArrowRight, GitBranch, Upload, FileText, UserRound,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { Topbar } from "@/components/layout/topbar";
+import type { ConversationListResponse, ConversationResponse } from "@/types/inbox";
 
 interface DashboardData {
   conversations: { open: number; bot_handling: number; resolved_today: number };
@@ -64,9 +66,13 @@ function StatCard({
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [recent, setRecent] = useState<ConversationResponse[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    api.get<ConversationListResponse>("/conversations", { params: { page_size: 5 } })
+      .then(({ data }) => setRecent(data.items))
+      .catch(() => {});
     api.get<DashboardData>("/analytics/dashboard")
       .then(({ data }) => setData(data))
       .catch(() => {})
@@ -90,6 +96,25 @@ export default function DashboardPage() {
     <Topbar title="Dashboard" />
     <div className="p-4 sm:p-6 space-y-6">
       <p className="text-sm text-gray-500">Overview of your WhatsApp workspace</p>
+
+      {/* ── Quick Actions ── */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          { href: "/campaigns", icon: Send, label: "New Campaign" },
+          { href: "/flows", icon: GitBranch, label: "New Flow" },
+          { href: "/contacts", icon: Upload, label: "Import Contacts" },
+          { href: "/templates", icon: FileText, label: "Templates" },
+        ].map((a) => (
+          <Link
+            key={a.href}
+            href={a.href}
+            className="group flex items-center gap-2.5 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-700 shadow-sm transition-all hover:border-primary hover:text-primary hover:shadow-md"
+          >
+            <a.icon className="h-4 w-4 text-gray-400 transition-colors group-hover:text-primary" />
+            {a.label}
+          </Link>
+        ))}
+      </div>
 
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -175,6 +200,91 @@ export default function DashboardPage() {
             <Bar dataKey="outbound" name="Outbound" fill="#8b5cf6" radius={[6, 6, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
+      </div>
+
+      {/* ── Handling split + Recent conversations ── */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* Bot vs Human donut */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-5">
+          <h2 className="text-sm font-semibold text-gray-700 mb-2">Open Chats — Who&apos;s Handling</h2>
+          {(() => {
+            const bot = data.conversations.bot_handling;
+            const human = Math.max(data.conversations.open - bot, 0);
+            const pie = [
+              { name: "Bot", value: bot },
+              { name: "Human", value: human },
+            ];
+            const COLORS = ["#16a34a", "#3b82f6"];
+            return data.conversations.open === 0 ? (
+              <p className="py-10 text-center text-sm text-gray-400">No open conversations</p>
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height={170}>
+                  <PieChart>
+                    <Pie data={pie} dataKey="value" innerRadius={48} outerRadius={70} paddingAngle={3} strokeWidth={0}>
+                      {pie.map((_, i) => <Cell key={i} fill={COLORS[i]} />)}
+                    </Pie>
+                    <Tooltip contentStyle={{ borderRadius: 10, border: "1px solid #e5e7eb", fontSize: 13 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="mt-1 flex justify-center gap-5 text-xs">
+                  <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[#16a34a]" /> Bot: {bot}</span>
+                  <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[#3b82f6]" /> Human: {human}</span>
+                </div>
+              </>
+            );
+          })()}
+        </div>
+
+        {/* Recent conversations */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 lg:col-span-2">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-700">Recent Conversations</h2>
+            <Link href="/inbox" className="flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+              Open Inbox <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+          {recent.length === 0 ? (
+            <p className="py-8 text-center text-sm text-gray-400">No conversations yet</p>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {recent.map((c) => (
+                <Link
+                  key={c.id}
+                  href="/inbox"
+                  className="flex items-center gap-3 py-2.5 transition-colors hover:bg-gray-50 -mx-2 px-2 rounded-lg"
+                >
+                  <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <UserRound className="h-4 w-4" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-gray-800">
+                      {c.contact.name || c.contact.phone}
+                    </span>
+                    <span className="block truncate text-xs text-gray-400">
+                      {c.last_message_preview || "—"}
+                    </span>
+                  </span>
+                  <span
+                    className={
+                      "flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold " +
+                      (c.handling === "bot"
+                        ? "bg-green-100 text-green-700"
+                        : "bg-blue-100 text-blue-700")
+                    }
+                  >
+                    {c.handling}
+                  </span>
+                  {c.unread_count > 0 && (
+                    <span className="flex h-5 min-w-5 flex-shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">
+                      {c.unread_count}
+                    </span>
+                  )}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
     </>
