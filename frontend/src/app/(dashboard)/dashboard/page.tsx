@@ -13,6 +13,7 @@ import {
   Send, Activity,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { Topbar } from "@/components/layout/topbar";
 
 interface DashboardData {
   conversations: { open: number; bot_handling: number; resolved_today: number };
@@ -73,21 +74,22 @@ export default function DashboardPage() {
   }, []);
 
   if (loading) return (
+    <><Topbar title="Dashboard" />
     <div className="p-8 flex items-center justify-center min-h-64">
       <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-600 border-t-transparent" />
     </div>
+    </>
   );
 
   if (!data) return (
-    <div className="p-8 text-center text-gray-400">Failed to load dashboard.</div>
+    <><Topbar title="Dashboard" /><div className="p-8 text-center text-gray-400">Failed to load dashboard.</div></>
   );
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Overview of your WhatsApp workspace</p>
-      </div>
+    <>
+    <Topbar title="Dashboard" />
+    <div className="p-4 sm:p-6 space-y-6">
+      <p className="text-sm text-gray-500">Overview of your WhatsApp workspace</p>
 
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -175,5 +177,6 @@ export default function DashboardPage() {
         </ResponsiveContainer>
       </div>
     </div>
+    </>
   );
 }
