@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MessageCircle, X } from "lucide-react";
+import { MessageCircle, ShieldCheck, X } from "lucide-react";
 
 import { useAuth } from "@/context/auth-context";
 import { roleHasPermission } from "@/lib/permissions";
@@ -19,12 +19,17 @@ import { LOGOUT_ITEM, NAV_ITEMS } from "./sidebar-nav";
  */
 export function Sidebar() {
   const pathname = usePathname();
-  const { activeWorkspace, logout } = useAuth();
+  const { user, activeWorkspace, logout } = useAuth();
   const { mobileOpen, setMobileOpen } = useSidebar();
 
   const visibleItems = NAV_ITEMS.filter(
     (item) => !item.permission || roleHasPermission(activeWorkspace?.role, item.permission)
   );
+
+  const adminItem = user?.is_superuser
+    ? [{ href: "/admin", label: "Super Admin", icon: ShieldCheck, permission: undefined }]
+    : [];
+  const allItems = [...visibleItems, ...adminItem];
 
   const nav = (
     <>
@@ -46,7 +51,7 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 overflow-y-auto py-2">
-        {visibleItems.map((item) => {
+        {allItems.map((item) => {
           const isActive = pathname?.startsWith(item.href);
           const Icon = item.icon;
           return (

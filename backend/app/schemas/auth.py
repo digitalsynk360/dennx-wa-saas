@@ -53,6 +53,7 @@ class UserResponse(BaseModel):
     email: EmailStr
     phone: str | None = None
     is_active: bool
+    is_superuser: bool = False
     email_verified_at: datetime | None = None
     last_login_at: datetime | None = None
     created_at: datetime

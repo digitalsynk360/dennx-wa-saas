@@ -6,6 +6,7 @@ export interface UserResponse {
   email: string;
   phone: string | null;
   is_active: boolean;
+  is_superuser?: boolean;
   email_verified_at: string | null;
   last_login_at: string | null;
   created_at: string;
