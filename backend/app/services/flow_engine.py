@@ -399,22 +399,178 @@ async def _exec_node(
         variables.pop(d.get("variable_name", ""), None)
         return [], "default", False, None
 
-    # CONTACT OPS
+    # CONTACT OPS — real DB writes
     if t in ("add_tag", "remove_tag"):
-        logger.info(f"flow_{t}",
-            tag=_interpolate(d.get("tag_name", ""), variables))
-        return [], "default", False, None
-    if t in ("update_contact", "create_contact"):
-        logger.info(f"flow_{t}")
+        tag_name = _interpolate(d.get("tag_name", ""), variables).strip()
+        db = ctx.get("db")
+        contact_id = ctx.get("contact_id")
+        if tag_name and db is not None and contact_id:
+            try:
+                from sqlalchemy.orm import selectinload
+                from app.models.contact import Tag
+
+                res = await db.execute(
+                    select(Contact)
+                    .options(selectinload(Contact.tags))
+                    .where(
+                        Contact.id == contact_id,
+                        Contact.workspace_id == ctx["workspace_id"],
+                    )
+                )
+                contact = res.scalar_one_or_none()
+                if contact is not None:
+                    res = await db.execute(
+                        select(Tag).where(
+                            Tag.workspace_id == ctx["workspace_id"],
+                            Tag.name == tag_name,
+                        )
+                    )
+                    tag = res.scalar_one_or_none()
+                    if t == "add_tag":
+                        if tag is None:
+                            tag = Tag(
+                                workspace_id=ctx["workspace_id"],
+                                name=tag_name, color=None,
+                            )
+                            db.add(tag)
+                            await db.flush()
+                        if all(x.id != tag.id for x in contact.tags):
+                            contact.tags.append(tag)
+                    elif tag is not None:
+                        contact.tags = [x for x in contact.tags if x.id != tag.id]
+                    await db.flush()
+                    logger.info(f"flow_{t}_applied", tag=tag_name)
+            except Exception as e:
+                logger.error(f"flow_{t}_failed", error=str(e))
         return [], "default", False, None
 
-    # TEAM OPS
+    if t == "update_contact":
+        db = ctx.get("db")
+        contact_id = ctx.get("contact_id")
+        if db is not None and contact_id:
+            try:
+                res = await db.execute(
+                    select(Contact).where(
+                        Contact.id == contact_id,
+                        Contact.workspace_id == ctx["workspace_id"],
+                    )
+                )
+                contact = res.scalar_one_or_none()
+                if contact is not None:
+                    for field in ("name", "email", "city"):
+                        val = _interpolate(d.get(field, "") or "", variables).strip()
+                        if val:
+                            setattr(contact, field, val)
+                    await db.flush()
+                    logger.info("flow_update_contact_applied")
+            except Exception as e:
+                logger.error("flow_update_contact_failed", error=str(e))
+        return [], "default", False, None
+
+    if t == "create_contact":
+        db = ctx.get("db")
+        phone = _interpolate(d.get("phone", "") or "", variables).strip()
+        if db is not None and phone:
+            try:
+                res = await db.execute(
+                    select(Contact).where(
+                        Contact.workspace_id == ctx["workspace_id"],
+                        Contact.phone == phone,
+                    )
+                )
+                if res.scalar_one_or_none() is None:
+                    name  = _interpolate(d.get("name", "") or "", variables).strip() or None
+                    email = _interpolate(d.get("email", "") or "", variables).strip() or None
+                    db.add(Contact(
+                        workspace_id=ctx["workspace_id"],
+                        phone=phone, name=name, email=email,
+                        source="flow", status="new",
+                    ))
+                    await db.flush()
+                    logger.info("flow_create_contact_applied", phone=phone)
+            except Exception as e:
+                logger.error("flow_create_contact_failed", error=str(e))
+        return [], "default", False, None
+
+    # TEAM OPS — real assignment
     if t == "assign_agent":
-        logger.info("flow_assign_agent", strategy=d.get("strategy"))
+        db = ctx.get("db")
+        conv_id = ctx.get("conversation_id")
+        if db is not None and conv_id:
+            try:
+                from sqlalchemy import func as sa_func
+                from app.models.identity import WorkspaceMember
+                from app.models.messaging import Conversation
+
+                agent_uuid = None
+                raw_agent = _interpolate(d.get("agent_id", "") or "", variables).strip()
+                if d.get("strategy") == "specific" and raw_agent:
+                    try:
+                        agent_uuid = uuid.UUID(raw_agent)
+                    except ValueError:
+                        agent_uuid = None
+                if agent_uuid is None:
+                    # round_robin / least_busy: member with fewest open chats
+                    res = await db.execute(
+                        select(
+                            WorkspaceMember.user_id,
+                            sa_func.count(Conversation.id).label("open_count"),
+                        )
+                        .outerjoin(
+                            Conversation,
+                            (Conversation.assigned_agent_id == WorkspaceMember.user_id)
+                            & (Conversation.workspace_id == ctx["workspace_id"])
+                            & (Conversation.status == "open"),
+                        )
+                        .where(
+                            WorkspaceMember.workspace_id == ctx["workspace_id"],
+                            WorkspaceMember.is_active == True,  # noqa: E712
+                        )
+                        .group_by(WorkspaceMember.user_id)
+                        .order_by(sa_func.count(Conversation.id).asc())
+                        .limit(1)
+                    )
+                    row = res.first()
+                    agent_uuid = row[0] if row else None
+                if agent_uuid is not None:
+                    res = await db.execute(
+                        select(Conversation).where(
+                            Conversation.id == conv_id,
+                            Conversation.workspace_id == ctx["workspace_id"],
+                        )
+                    )
+                    conv = res.scalar_one_or_none()
+                    if conv is not None:
+                        conv.assigned_agent_id = agent_uuid
+                        conv.handling = "human"
+                        await db.flush()
+                        logger.info("flow_assign_agent_applied", agent=str(agent_uuid))
+            except Exception as e:
+                logger.error("flow_assign_agent_failed", error=str(e))
         return [], "default", False, None
+
     if t == "transfer_chat":
-        logger.info("flow_transfer_chat", team=d.get("team"))
+        # Hand conversation to humans (team routing = assignment above)
+        db = ctx.get("db")
+        conv_id = ctx.get("conversation_id")
+        if db is not None and conv_id:
+            try:
+                from app.models.messaging import Conversation
+                res = await db.execute(
+                    select(Conversation).where(
+                        Conversation.id == conv_id,
+                        Conversation.workspace_id == ctx["workspace_id"],
+                    )
+                )
+                conv = res.scalar_one_or_none()
+                if conv is not None:
+                    conv.handling = "human"
+                    await db.flush()
+                    logger.info("flow_transfer_chat_applied", team=d.get("team"))
+            except Exception as e:
+                logger.error("flow_transfer_chat_failed", error=str(e))
         return [], "default", False, None
+
     if t == "create_ticket":
         logger.info("flow_create_ticket", subject=d.get("subject"))
         return [], "default", False, None
@@ -442,10 +598,71 @@ async def _exec_node(
             variables["_api_error"] = str(e)
             return [], "error", False, None
 
-    # DATABASE
+    # DATABASE — contacts table supported
     if t == "find_record":
+        db = ctx.get("db")
+        table = (d.get("table") or "").strip().lower()
+        if db is not None and table in ("contact", "contacts"):
+            try:
+                import json as _json
+                raw = _interpolate(d.get("conditions", "") or "{}", variables)
+                try:
+                    conds = _json.loads(raw) if raw.strip() else {}
+                except Exception:
+                    conds = {}
+                stmt = select(Contact).where(
+                    Contact.workspace_id == ctx["workspace_id"]
+                )
+                if conds.get("phone"):
+                    stmt = stmt.where(Contact.phone == str(conds["phone"]).strip())
+                if conds.get("name"):
+                    stmt = stmt.where(Contact.name.ilike(f"%{conds['name']}%"))
+                if conds.get("email"):
+                    stmt = stmt.where(Contact.email == str(conds["email"]).strip())
+                res = await db.execute(stmt.limit(1))
+                found = res.scalar_one_or_none()
+                if found is not None:
+                    variables["_record_id"]    = str(found.id)
+                    variables["_record_name"]  = found.name or ""
+                    variables["_record_phone"] = found.phone
+                    variables["_record_email"] = found.email or ""
+                    return [], "found", False, None
+            except Exception as e:
+                logger.error("flow_find_record_failed", error=str(e))
         return [], "not_found", False, None
+
     if t in ("create_record", "update_record"):
+        db = ctx.get("db")
+        table = (d.get("table") or "").strip().lower()
+        if db is not None and table in ("contact", "contacts") and t == "create_record":
+            try:
+                import json as _json
+                raw = _interpolate(d.get("data", "") or "{}", variables)
+                try:
+                    payload = _json.loads(raw) if raw.strip() else {}
+                except Exception:
+                    payload = {}
+                phone = str(payload.get("phone", "")).strip()
+                if phone:
+                    res = await db.execute(
+                        select(Contact).where(
+                            Contact.workspace_id == ctx["workspace_id"],
+                            Contact.phone == phone,
+                        )
+                    )
+                    if res.scalar_one_or_none() is None:
+                        db.add(Contact(
+                            workspace_id=ctx["workspace_id"],
+                            phone=phone,
+                            name=(str(payload.get("name", "")).strip() or None),
+                            email=(str(payload.get("email", "")).strip() or None),
+                            city=(str(payload.get("city", "")).strip() or None),
+                            source="flow", status="new",
+                        ))
+                        await db.flush()
+                        logger.info("flow_create_record_applied", phone=phone)
+            except Exception as e:
+                logger.error("flow_create_record_failed", error=str(e))
         return [], "default", False, None
 
     # PAYMENT
