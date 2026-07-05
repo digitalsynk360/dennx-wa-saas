@@ -7,8 +7,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Building2, LogOut, MessageSquare, Phone, Search,
-  ShieldCheck, Users as UsersIcon,
+  BookUser, Building2, LogOut, MessageSquare, Phone, Search,
+  ShieldCheck, UserPlus, Users as UsersIcon,
 } from "lucide-react";
 
 import { Alert } from "@/components/ui/alert";
@@ -111,11 +111,21 @@ export default function SuperAdminPanel() {
     );
   }
 
+  const planCounts = wsRows.reduce<Record<string, number>>((acc, w) => {
+    acc[w.plan] = (acc[w.plan] || 0) + 1;
+    return acc;
+  }, {});
+  const recentUsers = [...userRows]
+    .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at))
+    .slice(0, 5);
+
   const stats = overview ? [
     { icon: Building2, label: "Workspaces", value: `${overview.active_workspaces}/${overview.total_workspaces}`, sub: "active/total" },
     { icon: UsersIcon, label: "Users", value: overview.total_users, sub: "registered" },
+    { icon: BookUser, label: "Contacts", value: overview.total_contacts, sub: "platform-wide" },
     { icon: Phone, label: "WhatsApp", value: overview.connected_whatsapp, sub: "connected" },
     { icon: MessageSquare, label: "Messages", value: overview.messages_30d, sub: "last 30 days" },
+    { icon: ShieldCheck, label: "Superadmins", value: userRows.filter((u) => u.is_superuser).length, sub: "with access" },
   ] : [];
 
   return (
@@ -140,7 +150,7 @@ export default function SuperAdminPanel() {
         {error && <Alert variant="destructive" className="mb-4">{error}</Alert>}
 
         {/* Stats */}
-        <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
           {stats.map((s) => (
             <div key={s.label} className="flex items-center gap-3 rounded-xl border border-border bg-white p-4">
               <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -152,6 +162,54 @@ export default function SuperAdminPanel() {
               </span>
             </div>
           ))}
+        </div>
+
+        {/* Plan distribution + recent signups */}
+        <div className="mb-6 grid gap-3 lg:grid-cols-2">
+          <div className="rounded-xl border border-border bg-white p-4">
+            <p className="mb-3 text-sm font-semibold">Plan Distribution</p>
+            {Object.keys(planCounts).length === 0 ? (
+              <p className="text-sm text-muted-foreground">No workspaces</p>
+            ) : (
+              <div className="space-y-2">
+                {PLANS.filter((p) => planCounts[p]).map((p) => {
+                  const total = wsRows.length || 1;
+                  const pct = Math.round(((planCounts[p] || 0) / total) * 100);
+                  return (
+                    <div key={p} className="flex items-center gap-3 text-sm">
+                      <span className="w-16 capitalize text-muted-foreground">{p}</span>
+                      <span className="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
+                        <span className="block h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+                      </span>
+                      <span className="w-14 text-right text-xs text-muted-foreground">{planCounts[p]} · {pct}%</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <div className="rounded-xl border border-border bg-white p-4">
+            <p className="mb-3 flex items-center gap-1.5 text-sm font-semibold">
+              <UserPlus className="h-4 w-4 text-primary" /> Recent Signups
+            </p>
+            {recentUsers.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No users yet</p>
+            ) : (
+              <div className="divide-y divide-border">
+                {recentUsers.map((u) => (
+                  <div key={u.id} className="flex items-center justify-between py-1.5 text-sm">
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium">{u.full_name}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{u.email}</span>
+                    </span>
+                    <span className="flex-shrink-0 text-xs text-muted-foreground">
+                      {new Date(u.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Tabs + search */}

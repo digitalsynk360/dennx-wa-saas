@@ -141,12 +141,14 @@ async def list_all_workspaces(
         stmt = stmt.where(Workspace.name.ilike(f"%{search}%"))
 
     rows = (await db.execute(stmt)).all()
-    out: list[AdminWorkspaceRow] = []
-    for ws, members, contacts, msgs in rows:
-        row = AdminWorkspaceRow.model_validate(ws)
-        row.members, row.contacts, row.messages_30d = members, contacts, msgs
-        out.append(row)
-    return out
+    return [
+        AdminWorkspaceRow(
+            id=ws.id, name=ws.name, plan=ws.plan,
+            is_active=ws.is_active, created_at=ws.created_at,
+            members=members, contacts=contacts, messages_30d=msgs,
+        )
+        for ws, members, contacts, msgs in rows
+    ]
 
 
 @router.patch("/workspaces/{workspace_id}", response_model=AdminWorkspaceRow)
@@ -166,7 +168,10 @@ async def update_workspace_admin(
     if payload.is_active is not None:
         ws.is_active = payload.is_active
     await db.flush()
-    return AdminWorkspaceRow.model_validate(ws)
+    return AdminWorkspaceRow(
+        id=ws.id, name=ws.name, plan=ws.plan,
+        is_active=ws.is_active, created_at=ws.created_at,
+    )
 
 
 @router.get("/users", response_model=list[AdminUserRow])
@@ -190,12 +195,14 @@ async def list_all_users(
             User.email.ilike(f"%{search}%") | User.full_name.ilike(f"%{search}%")
         )
     rows = (await db.execute(stmt)).all()
-    out: list[AdminUserRow] = []
-    for user, n in rows:
-        row = AdminUserRow.model_validate(user)
-        row.workspaces = n
-        out.append(row)
-    return out
+    return [
+        AdminUserRow(
+            id=user.id, full_name=user.full_name, email=user.email,
+            is_active=user.is_active, is_superuser=user.is_superuser,
+            created_at=user.created_at, workspaces=n,
+        )
+        for user, n in rows
+    ]
 
 
 @router.patch("/users/{user_id}", response_model=AdminUserRow)
@@ -217,4 +224,8 @@ async def update_user_admin(
     if payload.is_superuser is not None:
         user.is_superuser = payload.is_superuser
     await db.flush()
-    return AdminUserRow.model_validate(user)
+    return AdminUserRow(
+        id=user.id, full_name=user.full_name, email=user.email,
+        is_active=user.is_active, is_superuser=user.is_superuser,
+        created_at=user.created_at,
+    )
