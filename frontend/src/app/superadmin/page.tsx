@@ -1,18 +1,24 @@
 "use client";
+/**
+ * Super Admin panel — standalone (no dashboard sidebar).
+ * URL: /superadmin  ·  Login: /superadmin/login
+ * Guards itself: non-superusers are bounced to the admin login.
+ */
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
-  Building2, MessageSquare, Search, Shield, ShieldCheck,
-  Users as UsersIcon, Phone,
+  Building2, LogOut, MessageSquare, Phone, Search,
+  ShieldCheck, Users as UsersIcon,
 } from "lucide-react";
 
-import { Topbar } from "@/components/layout/topbar";
 import { Alert } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { useAuth } from "@/context/auth-context";
 import { api } from "@/lib/api";
+import { clearTokens } from "@/lib/auth-storage";
 import { cn } from "@/lib/utils";
+import type { MeResponse } from "@/types/auth";
 
 interface Overview {
   total_workspaces: number; active_workspaces: number; total_users: number;
@@ -29,14 +35,27 @@ interface UserRow {
 
 const PLANS = ["free", "starter", "growth", "scale"];
 
-export default function AdminPage() {
-  const { user } = useAuth();
+export default function SuperAdminPanel() {
+  const router = useRouter();
+  const [me, setMe] = useState<MeResponse["user"] | null>(null);
+  const [checking, setChecking] = useState(true);
   const [tab, setTab] = useState<"workspaces" | "users">("workspaces");
   const [overview, setOverview] = useState<Overview | null>(null);
   const [wsRows, setWsRows] = useState<WsRow[]>([]);
   const [userRows, setUserRows] = useState<UserRow[]>([]);
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  // ── Guard: superuser only ──
+  useEffect(() => {
+    api.get<MeResponse>("/auth/me")
+      .then(({ data }) => {
+        if (!data.user.is_superuser) throw new Error("not superuser");
+        setMe(data.user);
+        setChecking(false);
+      })
+      .catch(() => router.replace("/superadmin/login"));
+  }, [router]);
 
   const load = useCallback(async () => {
     try {
@@ -46,15 +65,14 @@ export default function AdminPage() {
         api.get<UserRow[]>("/admin/users", { params: { search } }),
       ]);
       setOverview(o.data); setWsRows(w.data); setUserRows(u.data);
-    } catch {
-      setError("Load failed — kya aap superadmin hain?");
-    }
+    } catch { setError("Data load failed"); }
   }, [search]);
 
   useEffect(() => {
+    if (checking) return;
     const t = setTimeout(load, 300);
     return () => clearTimeout(t);
-  }, [load]);
+  }, [checking, load]);
 
   const changePlan = async (id: string, plan: string) => {
     try {
@@ -70,22 +88,26 @@ export default function AdminPage() {
     } catch { setError("Update failed"); }
   };
 
-  const toggleUser = async (id: string, patch: Partial<Pick<UserRow, "is_active" | "is_superuser">>) => {
+  const toggleUser = async (
+    id: string,
+    patch: Partial<Pick<UserRow, "is_active" | "is_superuser">>
+  ) => {
     try {
       const { data } = await api.patch<UserRow>(`/admin/users/${id}`, patch);
       setUserRows((r) => r.map((u) => (u.id === id ? data : u)));
     } catch { setError("Update failed"); }
   };
 
-  if (user && !user.is_superuser) {
+  const handleLogout = () => {
+    clearTokens();
+    router.replace("/superadmin/login");
+  };
+
+  if (checking) {
     return (
-      <>
-        <Topbar title="Super Admin" />
-        <div className="p-8 text-center text-muted-foreground">
-          <Shield className="mx-auto mb-3 h-10 w-10" />
-          Sirf platform superadmin is page ko dekh sakte hain.
-        </div>
-      </>
+      <main className="flex min-h-screen items-center justify-center bg-gray-950 text-gray-400">
+        Verifying access...
+      </main>
     );
   }
 
@@ -97,9 +119,24 @@ export default function AdminPage() {
   ] : [];
 
   return (
-    <>
-      <Topbar title="Super Admin" />
-      <div className="p-4 sm:p-6">
+    <main className="min-h-screen bg-gray-100">
+      {/* ── Admin topbar ── */}
+      <header className="sticky top-0 z-30 flex h-14 items-center justify-between bg-gray-900 px-4 text-white sm:px-6">
+        <span className="flex items-center gap-2 font-semibold">
+          <ShieldCheck className="h-5 w-5 text-primary" /> Super Admin
+        </span>
+        <span className="flex items-center gap-3 text-sm">
+          <span className="hidden text-gray-400 sm:inline">{me?.email}</span>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-gray-300 hover:bg-white/10"
+          >
+            <LogOut className="h-4 w-4" /> Logout
+          </button>
+        </span>
+      </header>
+
+      <div className="mx-auto max-w-6xl p-4 sm:p-6">
         {error && <Alert variant="destructive" className="mb-4">{error}</Alert>}
 
         {/* Stats */}
@@ -222,7 +259,7 @@ export default function AdminPage() {
                           size="sm"
                           checked={u.is_superuser}
                           onCheckedChange={(v) => toggleUser(u.id, { is_superuser: v })}
-                          disabled={u.id === user?.id}
+                          disabled={u.id === me?.id}
                         />
                       </td>
                       <td className="px-4 py-3">
@@ -230,7 +267,7 @@ export default function AdminPage() {
                           size="sm"
                           checked={u.is_active}
                           onCheckedChange={(v) => toggleUser(u.id, { is_active: v })}
-                          disabled={u.id === user?.id}
+                          disabled={u.id === me?.id}
                         />
                       </td>
                     </tr>
@@ -244,6 +281,6 @@ export default function AdminPage() {
           </div>
         )}
       </div>
-    </>
+    </main>
   );
 }
