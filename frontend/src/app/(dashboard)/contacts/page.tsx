@@ -78,14 +78,27 @@ export default function ContactsPage() {
     if (!file) return;
     const formData = new FormData();
     formData.append("file", file);
+    setSuccess(null); setError(null);
+    setSuccess("Importing...");
     try {
       const { data } = await api.post<ImportResult>("/contacts/import", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      setSuccess(`Imported: ${data.created} created, ${data.skipped} skipped`);
+      const errTxt = data.errors.length
+        ? ` · ${data.errors.length} errors (${data.errors.slice(0,2).join("; ")}${data.errors.length > 2 ? "..." : ""})`
+        : "";
+      setSuccess(`✅ ${data.created} imported · ${data.skipped} skipped${errTxt}`);
       await load();
-    } catch { setError("Import failed"); }
+    } catch { setError("Import failed — CSV format check karo (phone,name,email,city columns chahiye)."); setSuccess(null); }
     if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const downloadTemplate = () => {
+    const csv = "phone,name,email,city\n+919876543210,Rahul Sharma,rahul@email.com,Delhi\n+918765432109,Priya Singh,priya@email.com,Mumbai";
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = "contacts_template.csv";
+    a.click();
   };
 
   const pageSize = 30;
@@ -113,6 +126,7 @@ export default function ContactsPage() {
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={handleExport}><Download className="h-4 w-4" /> Export CSV</Button>
+            <Button variant="outline" size="sm" onClick={downloadTemplate} title="Download CSV template"><Download className="h-4 w-4" /> Template</Button>
             <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}><Upload className="h-4 w-4" /> Import CSV</Button>
             <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleImport} />
             <Button size="sm" onClick={() => setAddOpen(true)}><Plus className="h-4 w-4" /> Add Contact</Button>

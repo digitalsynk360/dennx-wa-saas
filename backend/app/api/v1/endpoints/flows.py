@@ -149,6 +149,76 @@ async def deactivate_flow(
     return FlowResponse.model_validate(flow)
 
 
+
+@router.get("/{flow_id}/analytics")
+async def get_flow_analytics(
+    flow_id: uuid.UUID,
+    days: int = Query(30, ge=1, le=365),
+    ctx: WorkspaceContext = Depends(require_permission("flows.read")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Per-flow analytics: sessions, completion rate, daily chart."""
+    from datetime import timedelta, timezone
+    from datetime import datetime
+    from sqlalchemy import func as sa_func, case
+    from app.models.automation import FlowSession
+
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+
+    # Total / completed / waiting sessions
+    res = await db.execute(
+        select(
+            sa_func.count(FlowSession.id).label("total"),
+            sa_func.sum(case((FlowSession.status == "completed", 1), else_=0)).label("completed"),
+            sa_func.sum(case((FlowSession.status == "waiting", 1), else_=0)).label("waiting"),
+            sa_func.sum(case((FlowSession.status == "error", 1), else_=0)).label("errors"),
+        ).where(
+            FlowSession.workspace_id == ctx.workspace.id,
+            FlowSession.flow_id == flow_id,
+            FlowSession.created_at >= since,
+        )
+    )
+    row = res.first()
+    total = row.total or 0
+    completed = row.completed or 0
+    waiting = row.waiting or 0
+    errors = row.errors or 0
+    completion_rate = round((completed / total * 100), 1) if total > 0 else 0.0
+
+    # Daily chart
+    daily = []
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    for i in range(min(days, 14), -1, -1):
+        day_start = today - timedelta(days=i)
+        day_end = day_start + timedelta(days=1)
+        r = await db.execute(
+            select(
+                sa_func.count(FlowSession.id).label("total"),
+                sa_func.sum(case((FlowSession.status == "completed", 1), else_=0)).label("completed"),
+            ).where(
+                FlowSession.workspace_id == ctx.workspace.id,
+                FlowSession.flow_id == flow_id,
+                FlowSession.created_at >= day_start,
+                FlowSession.created_at < day_end,
+            )
+        )
+        dr = r.first()
+        daily.append({
+            "date": day_start.strftime("%d %b"),
+            "sessions": dr.total or 0,
+            "completed": dr.completed or 0,
+        })
+
+    return {
+        "flow_id": str(flow_id),
+        "period_days": days,
+        "total_sessions": total,
+        "completed": completed,
+        "waiting": waiting,
+        "errors": errors,
+        "completion_rate": completion_rate,
+        "daily_chart": daily,
+    }
 @router.delete("/{flow_id}", status_code=204)
 async def delete_flow(
     flow_id: uuid.UUID,

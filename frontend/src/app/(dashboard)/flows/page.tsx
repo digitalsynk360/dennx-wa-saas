@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { GitBranch, Plus, Trash2 } from "lucide-react";
+import { BarChart2, GitBranch, Plus, Trash2, X } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -9,12 +9,20 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { api } from "@/lib/api";
 import type { FlowListResponse, FlowResponse } from "@/types/chatbot";
 
 export default function FlowsPage() {
   const [flows, setFlows] = useState<FlowResponse[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [analyticsFlow, setAnalyticsFlow] = useState<FlowResponse | null>(null);
+  const [analytics, setAnalytics] = useState<{
+    total_sessions: number; completed: number; waiting: number;
+    errors: number; completion_rate: number;
+    daily_chart: { date: string; sessions: number; completed: number }[];
+  } | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -50,6 +58,18 @@ export default function FlowsPage() {
     catch { setError("Failed to delete flow"); }
   };
 
+
+  const openAnalytics = async (flow: FlowResponse) => {
+    setAnalyticsFlow(flow);
+    setAnalytics(null);
+    setAnalyticsLoading(true);
+    try {
+      const { data } = await api.get(`/flows/${flow.id}/analytics?days=30`);
+      setAnalytics(data);
+    } catch { setAnalytics(null); }
+    finally { setAnalyticsLoading(false); }
+  };
+
   return (
     <>
       <Topbar title="Flows" />
@@ -79,6 +99,9 @@ export default function FlowsPage() {
                     <Link href={`/flows/${flow.id}`} className="font-medium hover:underline truncate block">{flow.name}</Link>
                     <p className="text-xs text-muted-foreground mt-0.5">{flow.nodes.length} nodes · v{flow.version}</p>
                   </div>
+                  <Button variant="ghost" size="sm" onClick={() => openAnalytics(flow)} className="text-muted-foreground hover:bg-muted flex-shrink-0" title="Analytics">
+                    <BarChart2 className="h-4 w-4" />
+                  </Button>
                   <Button variant="ghost" size="sm" onClick={() => handleDelete(flow.id)} className="text-red-600 hover:bg-red-50 flex-shrink-0">
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -96,6 +119,55 @@ export default function FlowsPage() {
           </div>
         )}
       </div>
+
+      {/* Analytics Modal */}
+      {analyticsFlow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="relative w-full max-w-2xl rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border px-5 py-4">
+              <div>
+                <p className="font-semibold">{analyticsFlow.name}</p>
+                <p className="text-xs text-muted-foreground">Last 30 days</p>
+              </div>
+              <button onClick={() => setAnalyticsFlow(null)} className="rounded-lg p-1.5 hover:bg-muted">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-5">
+              {analyticsLoading ? (
+                <p className="py-10 text-center text-muted-foreground">Loading...</p>
+              ) : analytics ? (
+                <>
+                  <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    {[
+                      { label: "Total Sessions", value: analytics.total_sessions },
+                      { label: "Completed", value: analytics.completed },
+                      { label: "Waiting", value: analytics.waiting },
+                      { label: "Completion %", value: `${analytics.completion_rate}%` },
+                    ].map((s) => (
+                      <div key={s.label} className="rounded-xl border border-border bg-muted/40 p-3 text-center">
+                        <p className="text-xl font-bold">{s.value}</p>
+                        <p className="text-xs text-muted-foreground">{s.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <ResponsiveContainer width="100%" height={180}>
+                    <BarChart data={analytics.daily_chart} barGap={2}>
+                      <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                      <YAxis tick={{ fontSize: 10 }} width={28} />
+                      <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} />
+                      <Bar dataKey="sessions" name="Sessions" fill="#3b82f6" radius={[4,4,0,0]} />
+                      <Bar dataKey="completed" name="Completed" fill="#16a34a" radius={[4,4,0,0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </>
+              ) : (
+                <p className="py-10 text-center text-muted-foreground">No analytics data yet — flow run karo.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <Dialog open={modalOpen} onClose={() => setModalOpen(false)}>
         <DialogHeader><DialogTitle>New Flow</DialogTitle></DialogHeader>

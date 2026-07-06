@@ -165,6 +165,11 @@ export default function CampaignsPage() {
                   <td className="px-4 py-3 font-medium">{c.name}</td>
                   <td className="px-4 py-3">
                     <span className={`rounded px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[c.status] || ""}`}>{c.status}</span>
+                    {c.scheduled_at && c.status === "scheduled" && (
+                      <p className="mt-0.5 text-[10px] text-muted-foreground">
+                        📅 {new Date(c.scheduled_at).toLocaleString("en-IN")}
+                      </p>
+                    )}
                   </td>
                   <td className="px-4 py-3">{c.total_count}</td>
                   <td className="px-4 py-3">

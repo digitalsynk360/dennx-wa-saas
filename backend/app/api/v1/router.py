@@ -35,6 +35,7 @@ from app.api.v1.endpoints.api_keys import router as api_keys_router
 from app.api.v1.endpoints.notifications import router as notifications_router
 from app.api.v1.endpoints.agents import router as agents_router
 from app.api.v1.endpoints.admin import router as admin_router
+from app.api.v1.endpoints.catalogue import router as catalogue_router
 
 api_router = APIRouter()
 api_router.include_router(auth_router)
@@ -56,6 +57,7 @@ api_router.include_router(api_keys_router)
 api_router.include_router(notifications_router)
 api_router.include_router(agents_router)
 api_router.include_router(admin_router)
+api_router.include_router(catalogue_router)
 
 
 @api_router.get("/ping", tags=["system"])

@@ -20,6 +20,26 @@ export function WhatsAppSettingsTab() {
   });
 
   useEffect(() => {
+    // Load Facebook SDK for Embedded Signup
+    if (typeof window !== "undefined" && !document.getElementById("facebook-jssdk")) {
+      const script = document.createElement("script");
+      script.id = "facebook-jssdk";
+      script.src = "https://connect.facebook.net/en_US/sdk.js";
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        (window as { fbAsyncInit?: () => void }).fbAsyncInit = () => {
+          (window as { FB?: { init: (opts: object) => void } }).FB?.init({
+            appId: process.env.NEXT_PUBLIC_META_APP_ID || "",
+            cookie: true, xfbml: true, version: "v21.0",
+          });
+        };
+      };
+      document.head.appendChild(script);
+    }
+  }, []);
+
+  useEffect(() => {
     api.get<WhatsAppAccountResponse | null>("/whatsapp/account")
       .then(({ data }) => {
         setAccount(data);
@@ -90,6 +110,51 @@ export function WhatsAppSettingsTab() {
               <div className="flex justify-between"><span className="text-muted-foreground">Quality Rating</span><span>{account.quality_rating || "—"}</span></div>
             </div>
           )}
+        </div>
+
+        {/* ── Embedded Signup (recommended) ── */}
+        <div className="rounded-xl border border-border bg-white p-5">
+          <h3 className="mb-1 text-sm font-semibold">Quick Connect (Recommended)</h3>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Facebook se seedha connect karo — Phone Number ID manually dhundhne ki zarurat nahi.
+          </p>
+          <button
+            onClick={() => {
+              // Facebook Embedded Signup flow
+              if (typeof window !== "undefined" && (window as { FB?: { login: (cb: (r: { authResponse?: { accessToken: string } }) => void, opts: object) => void } }).FB) {
+                const FB = ((window as unknown) as { FB: { login: (cb: (r: { authResponse?: { accessToken: string } }) => void, opts: object) => void } }).FB;
+                FB.login(
+                  (response: { authResponse?: { accessToken: string } }) => {
+                    if (response.authResponse?.accessToken) {
+                      setSuccess("Token received — please enter your Phone Number ID below to complete setup.");
+                      setForm((f) => ({ ...f, access_token: response.authResponse!.accessToken }));
+                    }
+                  },
+                  {
+                    scope: "whatsapp_business_messaging,whatsapp_business_management",
+                    extras: { feature: "whatsapp_embedded_signup" },
+                  }
+                );
+              } else {
+                setError("Facebook SDK load nahi hua. Page refresh karo ya manual setup use karo.");
+              }
+            }}
+            className="flex items-center gap-2 rounded-xl bg-[#1877F2] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#1864d9] transition-colors"
+          >
+            <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+            </svg>
+            Continue with Facebook
+          </button>
+          <p className="mt-2 text-[10px] text-muted-foreground">
+            WhatsApp Business API access required. Meta approval ke baad activate hoga.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-xs text-muted-foreground">ya manual setup karo</span>
+          <div className="h-px flex-1 bg-border" />
         </div>
 
         {/* Connect Form */}
