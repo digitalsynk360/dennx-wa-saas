@@ -5,6 +5,7 @@ import uuid
 from typing import Any
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.contact import Contact, Tag
@@ -138,6 +139,7 @@ async def import_contacts_csv(
     db: AsyncSession,
     workspace_id: uuid.UUID,
     csv_content: str,
+    tag_ids: list[uuid.UUID] | None = None,
 ) -> ImportResult:
     """Import contacts from CSV. Expected columns: phone, name, email, city."""
     repo = ContactRepository(db)
@@ -147,6 +149,14 @@ async def import_contacts_csv(
     skipped = 0
     errors: list[str] = []
     seen_phones: set[str] = set()
+
+    # Tags to attach to every imported contact
+    import_tags: list = []
+    if tag_ids:
+        res = await db.execute(
+            select(Tag).where(Tag.workspace_id == workspace_id, Tag.id.in_(tag_ids))
+        )
+        import_tags = list(res.scalars())
 
     for i, row in enumerate(reader, start=2):  # row 1 = header
         phone = (row.get("phone") or row.get("Phone") or "").strip()
@@ -177,6 +187,8 @@ async def import_contacts_csv(
                 city=(row.get("city") or row.get("City") or "").strip() or None,
                 source="import",
             )
+            if import_tags:
+                contact.tags = list(import_tags)
 
             db.add(contact)
             created += 1

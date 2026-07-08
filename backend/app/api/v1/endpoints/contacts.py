@@ -15,7 +15,7 @@ Contacts endpoints (Phase 6).
 import uuid
 from io import StringIO
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -71,12 +71,23 @@ async def export_contacts(
 @router.post("/contacts/import", response_model=ImportResult)
 async def import_contacts(
     file: UploadFile = File(...),
+    tag_ids: str = Form(""),
     ctx: WorkspaceContext = Depends(require_permission("contacts.write")),
     db: AsyncSession = Depends(get_db),
 ):
     content = await file.read()
+    parsed_tag_ids: list[uuid.UUID] = []
+    for part in tag_ids.split(","):
+        part = part.strip()
+        if part:
+            try:
+                parsed_tag_ids.append(uuid.UUID(part))
+            except ValueError:
+                pass
     result = await contact_service.import_contacts_csv(
-        db, ctx.workspace.id, content.decode("utf-8", errors="replace")
+        db, ctx.workspace.id,
+        content.decode("utf-8", errors="replace"),
+        tag_ids=parsed_tag_ids or None,
     )
     return result
 
@@ -119,6 +130,19 @@ async def delete_contact(
     db: AsyncSession = Depends(get_db),
 ):
     await contact_service.delete_contact(db, ctx.workspace.id, contact_id)
+
+
+@router.delete("/contacts/{contact_id}/tags/{tag_id}", response_model=ContactResponse)
+async def remove_tag_from_contact(
+    contact_id: uuid.UUID,
+    tag_id: uuid.UUID,
+    ctx: WorkspaceContext = Depends(require_permission("contacts.write")),
+    db: AsyncSession = Depends(get_db),
+):
+    contact = await contact_service.get_contact(db, ctx.workspace.id, contact_id)
+    contact.tags = [t for t in contact.tags if t.id != tag_id]
+    await db.flush()
+    return ContactResponse.model_validate(contact)
 
 
 @router.post("/contacts/{contact_id}/tags", response_model=ContactResponse)

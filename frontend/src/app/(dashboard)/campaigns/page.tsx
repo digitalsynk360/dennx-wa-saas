@@ -10,7 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { api } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import type { CampaignListResponse, CampaignResponse } from "@/types/campaigns";
+import type { TagResponse } from "@/types/contacts";
 import type { ContactListResponse, ContactResponse } from "@/types/contacts";
 import type { TemplateListResponse, TemplateResponse } from "@/types/templates";
 
@@ -34,9 +36,11 @@ export default function CampaignsPage() {
   const [form, setForm] = useState({ name: "", template_id: "" });
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
   const [contactSearch, setContactSearch] = useState("");
+  const [allTags, setAllTags] = useState<TagResponse[]>([]);
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
+    api.get<TagResponse[]>("/tags").then(({ data }) => setAllTags(data)).catch(() => {});
     try {
       const { data } = await api.get<CampaignListResponse>("/campaigns?page_size=50");
       setCampaigns(data.items);
@@ -243,6 +247,37 @@ export default function CampaignsPage() {
           })()}
           <div className="space-y-1.5">
             <Label>Contacts * ({selectedContacts.size} selected)</Label>
+            {allTags.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Group se select karo (click = us group ke sab contacts select):</p>
+                <div className="flex max-h-20 flex-wrap gap-1.5 overflow-y-auto">
+                  {allTags.map((t) => {
+                    const groupContacts = contacts.filter((c) => c.tags?.some((ct) => ct.id === t.id));
+                    if (groupContacts.length === 0) return null;
+                    const allIn = groupContacts.every((c) => selectedContacts.has(c.id));
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedContacts((prev) => {
+                            const next = new Set(prev);
+                            groupContacts.forEach((c) => (allIn ? next.delete(c.id) : next.add(c.id)));
+                            return next;
+                          });
+                        }}
+                        className={cn(
+                          "rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
+                          allIn ? "bg-primary text-white" : "border border-border bg-white text-muted-foreground hover:border-primary hover:text-primary"
+                        )}
+                      >
+                        {allIn && "✓ "}{t.name} ({groupContacts.length})
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
