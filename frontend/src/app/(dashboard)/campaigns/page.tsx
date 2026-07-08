@@ -37,6 +37,13 @@ export default function CampaignsPage() {
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
   const [contactSearch, setContactSearch] = useState("");
   const [allTags, setAllTags] = useState<TagResponse[]>([]);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<{
+    id: string; name: string; status: string;
+    total_count: number; sent_count: number; delivered_count: number;
+    read_count: number; failed_count: number;
+    recipients: { id: string; status: string; error_message: string | null; contact_name: string | null; contact_phone: string | null }[];
+  } | null>(null);
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -48,6 +55,21 @@ export default function CampaignsPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Campaign detail (per-recipient) — polls every 4s while open & active
+  useEffect(() => {
+    if (!detailId) { setDetail(null); return; }
+    let stop = false;
+    const fetchDetail = async () => {
+      try {
+        const { data } = await api.get(`/campaigns/${detailId}`);
+        if (!stop) setDetail(data);
+      } catch { if (!stop) setError("Detail load failed"); }
+    };
+    fetchDetail();
+    const t = setInterval(fetchDetail, 4000);
+    return () => { stop = true; clearInterval(t); };
+  }, [detailId]);
 
   // Auto-refresh every 5s while any campaign is active
   useEffect(() => {
@@ -166,7 +188,11 @@ export default function CampaignsPage() {
               )}
               {campaigns.map((c) => (
                 <tr key={c.id} className="border-b border-border last:border-0 hover:bg-muted/20">
-                  <td className="px-4 py-3 font-medium">{c.name}</td>
+                  <td className="px-4 py-3">
+                    <button onClick={() => setDetailId(c.id)} className="font-medium text-left hover:text-primary hover:underline">
+                      {c.name}
+                    </button>
+                  </td>
                   <td className="px-4 py-3">
                     <span className={`rounded px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[c.status] || ""}`}>{c.status}</span>
                     {c.scheduled_at && c.status === "scheduled" && (
@@ -214,6 +240,86 @@ export default function CampaignsPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Campaign Detail Modal (per-recipient status) ── */}
+      {detailId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-6">
+          <div className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex flex-shrink-0 items-center justify-between border-b border-border px-5 py-3.5">
+              <div>
+                <h2 className="font-semibold">{detail?.name || "Campaign"}</h2>
+                <p className="text-xs text-muted-foreground capitalize">Status: {detail?.status || "—"} · live updates har 4s</p>
+              </div>
+              <button onClick={() => setDetailId(null)} className="rounded-lg p-2 hover:bg-muted">✕</button>
+            </div>
+
+            {detail && (
+              <div className="grid flex-shrink-0 grid-cols-5 gap-2 border-b border-border px-5 py-3 text-center">
+                {[
+                  ["Total", detail.total_count, "text-gray-700"],
+                  ["Sent", detail.sent_count, "text-blue-600"],
+                  ["Delivered", detail.delivered_count, "text-green-600"],
+                  ["Read", detail.read_count, "text-emerald-600"],
+                  ["Failed", detail.failed_count, "text-red-600"],
+                ].map(([l, v, cls]) => (
+                  <div key={l as string}>
+                    <p className={`text-lg font-bold ${cls}`}>{v}</p>
+                    <p className="text-[10px] uppercase text-muted-foreground">{l}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex-1 overflow-y-auto">
+              {!detail ? (
+                <p className="py-10 text-center text-muted-foreground">Loading...</p>
+              ) : (
+                <table className="w-full text-left text-sm">
+                  <thead className="sticky top-0 border-b border-border bg-white text-xs uppercase text-muted-foreground">
+                    <tr>
+                      <th className="px-5 py-2.5">Contact</th>
+                      <th className="px-5 py-2.5">Status</th>
+                      <th className="px-5 py-2.5">Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {detail.recipients.map((r) => (
+                      <tr key={r.id}>
+                        <td className="px-5 py-2.5">
+                          <p className="font-medium">{r.contact_name || "—"}</p>
+                          <p className="text-xs text-muted-foreground">{r.contact_phone || ""}</p>
+                        </td>
+                        <td className="px-5 py-2.5">
+                          <span className={cn(
+                            "rounded px-2 py-0.5 text-xs font-medium capitalize",
+                            r.status === "read" ? "bg-emerald-100 text-emerald-700"
+                            : r.status === "delivered" ? "bg-green-100 text-green-700"
+                            : r.status === "sent" ? "bg-blue-100 text-blue-700"
+                            : r.status === "failed" ? "bg-red-100 text-red-700"
+                            : r.status === "skipped" ? "bg-gray-100 text-gray-600"
+                            : "bg-amber-100 text-amber-700"
+                          )}>
+                            {r.status}
+                          </span>
+                        </td>
+                        <td className="max-w-[220px] px-5 py-2.5">
+                          {r.error_message ? (
+                            <p className="text-xs text-red-600" title={r.error_message}>{r.error_message}</p>
+                          ) : r.status === "skipped" ? (
+                            <p className="text-xs text-muted-foreground">Opted out / blocked</p>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <Dialog open={modalOpen} onClose={() => setModalOpen(false)}>
         <DialogHeader><DialogTitle>New Campaign</DialogTitle></DialogHeader>

@@ -253,6 +253,9 @@ async def _send_one_recipient(
         # Conversation row. A future phase can create/attach a
         # conversation here if unified message history is needed.
         recipient.status = "sent"
+        vars_copy = dict(recipient.variables or {})
+        vars_copy["_wamid"] = wamid
+        recipient.variables = vars_copy
         campaign.sent_count += 1
     except Exception as e:
         recipient.status = "failed"

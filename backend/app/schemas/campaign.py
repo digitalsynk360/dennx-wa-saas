@@ -12,6 +12,8 @@ class CampaignRecipientResponse(BaseModel):
     status: str
     error_message: str | None
     created_at: datetime
+    contact_name: str | None = None
+    contact_phone: str | None = None
 
 
 class CampaignResponse(BaseModel):

@@ -16,6 +16,7 @@ import uuid
 from typing import Any
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -310,19 +311,51 @@ async def _handle_status_update(
     if not wamid or not new_status:
         return
 
+    now = datetime.now(timezone.utc)
+
+    # ── 1. Inbox messages table ──
     msg_repo = MessageRepository(db)
     msg      = await msg_repo.get_by_wamid(wamid)
-    if msg is None:
-        return
+    if msg is not None:
+        if new_status == "delivered":
+            msg.status       = "delivered"
+            msg.delivered_at = now
+        elif new_status == "read":
+            msg.status   = "read"
+            msg.read_at  = now
+        elif new_status == "failed":
+            msg.status = "failed"
 
-    now = datetime.now(timezone.utc)
-    if new_status == "delivered":
-        msg.status       = "delivered"
-        msg.delivered_at = now
-    elif new_status == "read":
-        msg.status   = "read"
-        msg.read_at  = now
-    elif new_status == "failed":
-        msg.status = "failed"
+    # ── 2. Campaign recipients (wamid stored in variables JSONB) ──
+    from app.models.campaign import Campaign, CampaignRecipient
+
+    rec_res = await db.execute(
+        select(CampaignRecipient, Campaign)
+        .join(Campaign, Campaign.id == CampaignRecipient.campaign_id)
+        .where(
+            Campaign.workspace_id == workspace_id,
+            CampaignRecipient.variables["_wamid"].astext == wamid,
+        )
+    )
+    row = rec_res.first()
+    if row is not None:
+        recipient, campaign = row
+        prev = recipient.status
+        if new_status == "delivered" and prev in ("sent", "pending"):
+            recipient.status = "delivered"
+            campaign.delivered_count += 1
+        elif new_status == "read" and prev in ("sent", "delivered", "pending"):
+            if prev != "delivered":
+                campaign.delivered_count += 1
+            recipient.status = "read"
+            campaign.read_count += 1
+        elif new_status == "failed" and prev != "failed":
+            recipient.status = "failed"
+            campaign.failed_count += 1
+            errs = status_update.get("errors") or []
+            if errs:
+                e0 = errs[0]
+                detail = (e0.get("error_data") or {}).get("details") or e0.get("message") or e0.get("title") or ""
+                recipient.error_message = f"[{e0.get('code','')}] {detail}"[:500]
 
     await db.flush()

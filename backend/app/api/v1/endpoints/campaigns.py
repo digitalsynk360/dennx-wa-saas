@@ -57,7 +57,22 @@ async def get_campaign(
     db: AsyncSession = Depends(get_db),
 ):
     campaign = await campaign_dispatcher.get_campaign_detail(db, ctx.workspace.id, campaign_id)
-    return CampaignDetailResponse.model_validate(campaign)
+    detail = CampaignDetailResponse.model_validate(campaign)
+
+    # Enrich recipients with contact name/phone
+    from sqlalchemy import select as sa_select
+    from app.models.contact import Contact
+    contact_ids = [r.contact_id for r in detail.recipients]
+    if contact_ids:
+        res = await db.execute(
+            sa_select(Contact.id, Contact.name, Contact.phone).where(Contact.id.in_(contact_ids))
+        )
+        cmap = {row[0]: (row[1], row[2]) for row in res.all()}
+        for r in detail.recipients:
+            info = cmap.get(r.contact_id)
+            if info:
+                r.contact_name, r.contact_phone = info
+    return detail
 
 
 @router.post("/{campaign_id}/launch", response_model=CampaignResponse)
