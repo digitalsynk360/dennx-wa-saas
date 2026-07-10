@@ -227,6 +227,19 @@ async def _trigger_bot_response(
             )
         return
 
+    # PRIORITY 4: AI reply (AI Hub — configured provider/model/prompt)
+    from app.services import llm_service
+
+    ai_text = await llm_service.generate_ai_reply(
+        db, workspace_id, conversation_id, message_text
+    )
+    if ai_text:
+        await _save_and_broadcast(
+            db, workspace_id, contact, conversation_id, [ai_text], ctx
+        )
+        logger.info("ai_reply_sent", chars=len(ai_text))
+        return
+
     logger.debug("no_bot_match", msg=message_text[:40])
 
 
