@@ -22,7 +22,7 @@ from urllib.parse import urljoin, urlparse
 import httpx
 import structlog
 from sqlalchemy import delete as sa_delete
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 from app.core.database import AsyncSessionLocal
 from app.core.redis import redis_client
@@ -313,9 +313,9 @@ async def get_stats(db, workspace_id: uuid.UUID) -> dict:
     )).scalar() or 0
 
     by_type_res = await db.execute(
-        select(KnowledgeDocument.metadata_["type"].astext, func.count())
+        select(KnowledgeDocument.metadata_["type"].astext.label("type"), func.count())
         .where(KnowledgeDocument.workspace_id == workspace_id)
-        .group_by(KnowledgeDocument.metadata_["type"].astext)
+        .group_by(text("1"))
     )
     by_type = {row[0] or "manual": row[1] for row in by_type_res.all()}
 
