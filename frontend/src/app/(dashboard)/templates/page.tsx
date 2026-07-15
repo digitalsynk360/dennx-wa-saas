@@ -268,7 +268,7 @@ export default function TemplatesPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1">
-                        {t.status === "draft" && (
+                        {(t.status === "draft" || t.status === "pending") && (
                           <Button variant="outline" size="sm" onClick={() => handleSubmit(t.id)} title="Submit for Meta approval">
                             <Send className="h-3.5 w-3.5" /> Submit
                           </Button>
