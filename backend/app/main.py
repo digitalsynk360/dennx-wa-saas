@@ -50,7 +50,11 @@ app = FastAPI(
 # required since frontend and backend are fully decoupled.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL],
+    allow_origins=[
+        "https://app.deenxconsultancy.com",
+        "https://api.deenxconsultancy.com",
+        settings.FRONTEND_URL,
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
