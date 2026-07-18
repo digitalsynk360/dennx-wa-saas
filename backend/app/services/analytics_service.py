@@ -162,7 +162,7 @@ async def _campaign_performance(db: AsyncSession, workspace_id: uuid.UUID, since
             "read_rate": round(read / sent * 100, 1) if sent else 0.0,
         })
     return performance
-async def get_dashboard_overview(db: AsyncSession, workspace_id: uuid.UUID) -> dict:
+async def get_dashboard_overview(db: AsyncSession, workspace_id: uuid.UUID, meta_days: int = 7) -> dict:
     """Real metrics for Dashboard page."""
     from datetime import timedelta
     from app.models.automation import ChatbotFlow, FlowSession
@@ -302,7 +302,7 @@ async def get_dashboard_overview(db: AsyncSession, workspace_id: uuid.UUID) -> d
     # Avg response time (reuse existing function)
     avg_response = await _avg_response_time_minutes(db, workspace_id, week_ago)
 
-    meta_insights = await _get_meta_insights(db, workspace_id)
+    meta_insights = await _get_meta_insights(db, workspace_id, meta_days)
 
     return {
         "conversations": {
@@ -336,11 +336,13 @@ async def get_dashboard_overview(db: AsyncSession, workspace_id: uuid.UUID) -> d
     }
 
 
-async def _get_meta_insights(db: AsyncSession, workspace_id: uuid.UUID) -> dict | None:
+async def _get_meta_insights(db: AsyncSession, workspace_id: uuid.UUID, days: int = 7) -> dict | None:
     """Live counters straight from Meta — All messages / Delivered /
-    Free vs Paid — same numbers as WhatsApp Manager > Insights, for the
-    last 7 days. Returns None (never raises) if account isn't connected
-    or Meta call fails, so the dashboard degrades gracefully."""
+    delivery rate — same numbers as WhatsApp Manager > Insights, for
+    the selected period, plus the connected phone number's live
+    health (quality rating, verified name, status). Returns None
+    (never raises) if account isn't connected or Meta call fails, so
+    the dashboard degrades gracefully."""
     import time
     import httpx
     from app.core.config import settings
@@ -355,24 +357,45 @@ async def _get_meta_insights(db: AsyncSession, workspace_id: uuid.UUID) -> dict 
 
         token = get_decrypted_token(account)
         now_ts = int(time.time())
-        start_ts = now_ts - 7 * 86400
+        start_ts = now_ts - days * 86400
+        headers = {"Authorization": f"Bearer {token}"}
 
-        url = f"{settings.graph_api_base}/{account.waba_id}"
-        params = {
-            "fields": f"analytics.start({start_ts}).end({now_ts}).granularity(DAY)",
-        }
         async with httpx.AsyncClient(timeout=12) as client:
-            r = await client.get(url, params=params, headers={"Authorization": f"Bearer {token}"})
-        if r.status_code != 200:
+            analytics_resp = await client.get(
+                f"{settings.graph_api_base}/{account.waba_id}",
+                params={"fields": f"analytics.start({start_ts}).end({now_ts}).granularity(DAY)"},
+                headers=headers,
+            )
+            # Phone number health — quality rating, verified name, status
+            phone_resp = None
+            if account.phone_number_id:
+                phone_resp = await client.get(
+                    f"{settings.graph_api_base}/{account.phone_number_id}",
+                    params={"fields": "display_phone_number,verified_name,quality_rating,code_verification_status,name_status,platform_type"},
+                    headers=headers,
+                )
+
+        if analytics_resp.status_code != 200:
             return None
 
-        data = r.json().get("analytics", {})
+        data = analytics_resp.json().get("analytics", {})
         points = data.get("data_points", [])
         total_sent = sum(p.get("sent", 0) for p in points)
         total_delivered = sum(p.get("delivered", 0) for p in points)
 
+        phone_health = None
+        if phone_resp is not None and phone_resp.status_code == 200:
+            pd = phone_resp.json()
+            phone_health = {
+                "display_phone_number": pd.get("display_phone_number"),
+                "verified_name": pd.get("verified_name"),
+                "quality_rating": pd.get("quality_rating"),   # GREEN | YELLOW | RED | UNKNOWN
+                "name_status": pd.get("name_status"),
+                "code_verification_status": pd.get("code_verification_status"),
+            }
+
         return {
-            "period": "last_7_days",
+            "period_days": days,
             "sent": total_sent,
             "delivered": total_delivered,
             "delivery_rate": round(total_delivered / total_sent * 100, 1) if total_sent else None,
@@ -384,6 +407,7 @@ async def _get_meta_insights(db: AsyncSession, workspace_id: uuid.UUID) -> dict 
                 }
                 for p in points
             ],
+            "phone_health": phone_health,
         }
     except Exception:
         return None

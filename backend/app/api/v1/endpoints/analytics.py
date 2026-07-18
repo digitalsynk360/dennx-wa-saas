@@ -25,8 +25,9 @@ async def get_overview(
 
 @router.get("/dashboard")
 async def get_dashboard(
+    days: int = Query(7, ge=1, le=90),
     ctx: WorkspaceContext = Depends(require_permission("analytics.read")),
     db: AsyncSession = Depends(get_db),
 ):
     """Real metrics for Dashboard page."""
-    return await analytics_service.get_dashboard_overview(db, ctx.workspace.id)
+    return await analytics_service.get_dashboard_overview(db, ctx.workspace.id, days)

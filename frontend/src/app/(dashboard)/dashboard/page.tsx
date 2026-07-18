@@ -26,11 +26,18 @@ interface DashboardData {
   avg_response_minutes: number | null;
   daily_chart: { date: string; inbound: number; outbound: number }[];
   meta_insights: {
-    period: string;
+    period_days: number;
     sent: number;
     delivered: number;
     delivery_rate: number | null;
     daily: { date: string; sent: number; delivered: number }[];
+    phone_health: {
+      display_phone_number: string | null;
+      verified_name: string | null;
+      quality_rating: string | null;
+      name_status: string | null;
+      code_verification_status: string | null;
+    } | null;
   } | null;
 }
 
@@ -75,16 +82,30 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [recent, setRecent] = useState<ConversationResponse[]>([]);
   const [loading, setLoading] = useState(true);
+  const [metaDays, setMetaDays] = useState(7);
+  const [metaLoading, setMetaLoading] = useState(false);
 
   useEffect(() => {
     api.get<ConversationListResponse>("/conversations", { params: { page_size: 5 } })
       .then(({ data }) => setRecent(data.items))
       .catch(() => {});
-    api.get<DashboardData>("/analytics/dashboard")
+    api.get<DashboardData>("/analytics/dashboard", { params: { days: metaDays } })
       .then(({ data }) => setData(data))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  // Refetch only the Meta insights block when the period changes —
+  // no need to reload the whole dashboard.
+  useEffect(() => {
+    if (loading) return; // skip the very first mount (covered above)
+    setMetaLoading(true);
+    api.get<DashboardData>("/analytics/dashboard", { params: { days: metaDays } })
+      .then(({ data }) => setData((prev) => (prev ? { ...prev, meta_insights: data.meta_insights } : data)))
+      .catch(() => {})
+      .finally(() => setMetaLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metaDays]);
 
   if (loading) return (
     <><Topbar title="Dashboard" />
@@ -209,13 +230,61 @@ export default function DashboardPage() {
         </ResponsiveContainer>
       </div>
 
-      {/* ── Meta WhatsApp Insights (live from Meta, last 7 days) ── */}
+      {/* ── Meta WhatsApp Insights (live from Meta, selectable period) ── */}
       {data.meta_insights && (
         <div className="bg-white rounded-2xl border border-gray-200 p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-700">WhatsApp Insights (Meta) — Last 7 Days</h2>
-            <span className="text-[10px] uppercase tracking-wide text-gray-400">Live from WhatsApp Manager</span>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-gray-700">
+              WhatsApp Insights (Meta) {metaLoading && <span className="text-gray-400">— updating...</span>}
+            </h2>
+            <div className="flex items-center gap-2">
+              <select
+                value={metaDays}
+                onChange={(e) => setMetaDays(Number(e.target.value))}
+                disabled={metaLoading}
+                className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value={7}>Last 7 days</option>
+                <option value={30}>Last 30 days</option>
+                <option value={60}>Last 60 days</option>
+                <option value={90}>Last 90 days</option>
+              </select>
+              <span className="text-[10px] uppercase tracking-wide text-gray-400">Live from WhatsApp Manager</span>
+            </div>
           </div>
+
+          {/* Phone number identity + health */}
+          {data.meta_insights.phone_health && (
+            <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-gray-800">
+                  {data.meta_insights.phone_health.verified_name || "—"}
+                </p>
+                <p className="text-xs text-gray-500">{data.meta_insights.phone_health.display_phone_number || "—"}</p>
+              </div>
+              {(() => {
+                const q = (data.meta_insights.phone_health.quality_rating || "UNKNOWN").toUpperCase();
+                const map: Record<string, { label: string; cls: string }> = {
+                  GREEN: { label: "High Quality", cls: "bg-green-100 text-green-700" },
+                  YELLOW: { label: "Medium Quality", cls: "bg-amber-100 text-amber-700" },
+                  RED: { label: "Low Quality", cls: "bg-red-100 text-red-700" },
+                  UNKNOWN: { label: "Unknown", cls: "bg-gray-200 text-gray-600" },
+                };
+                const info = map[q] || map.UNKNOWN;
+                return (
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${info.cls}`}>
+                    ● {info.label}
+                  </span>
+                );
+              })()}
+              {data.meta_insights.phone_health.name_status && (
+                <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600 capitalize">
+                  Name: {data.meta_insights.phone_health.name_status.toLowerCase().replace(/_/g, " ")}
+                </span>
+              )}
+            </div>
+          )}
+
           <div className="mb-4 grid grid-cols-3 gap-3">
             <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-center">
               <p className="text-xl font-bold text-gray-800">{data.meta_insights.sent}</p>

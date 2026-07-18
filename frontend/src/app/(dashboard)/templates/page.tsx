@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Check, CheckCircle2, FileText, Image as ImageIcon, Link2, Megaphone,
+  AlertTriangle, Check, CheckCircle2, FileText, Image as ImageIcon, Link2, Megaphone,
   Phone, Plus, RefreshCw, Search, Send, Settings2, ShieldCheck, Trash2,
   Type, Video, X,
 } from "lucide-react";
@@ -98,6 +98,7 @@ export default function TemplatesPage() {
   const [langSearch, setLangSearch] = useState("");
   const [langOpen, setLangOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   const load = useCallback(async () => {
@@ -110,8 +111,10 @@ export default function TemplatesPage() {
   useEffect(() => { load(); }, [load]);
 
   const handleSync = async () => {
+    setSyncing(true); setError(null);
     try { await api.post("/templates/sync"); setSuccess("Synced from Meta"); await load(); }
     catch { setError("Sync failed"); }
+    finally { setSyncing(false); }
   };
 
   const handleSubmit = async (id: string) => {
@@ -244,8 +247,8 @@ export default function TemplatesPage() {
             <p className="text-sm text-muted-foreground">Meta-approved templates for campaigns</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleSync}>
-              <RefreshCw className="h-4 w-4" /> Sync from Meta
+            <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
+              <RefreshCw className={cn("h-4 w-4", syncing && "animate-spin")} /> {syncing ? "Syncing..." : "Sync from Meta"}
             </Button>
             <Button size="sm" onClick={() => { setC({ ...EMPTY_CREATOR }); setCreatorOpen(true); }}>
               <Plus className="h-4 w-4" /> Create Template
@@ -284,11 +287,18 @@ export default function TemplatesPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1">
-                        {(t.status === "draft" || t.status === "pending") && (
-                          <Button variant="outline" size="sm" onClick={() => handleSubmit(t.id)} title="Submit for Meta approval">
-                            <Send className="h-3.5 w-3.5" /> Submit
-                          </Button>
-                        )}
+                        {(t.status === "draft" || t.status === "pending") && (() => {
+                          const needsMedia = ["image", "video", "document"].includes(t.header_type || "") && !t.header_handle;
+                          return needsMedia ? (
+                            <span className="flex items-center gap-1 text-xs text-red-600" title="Yeh template incomplete hai — header sample upload nahi hua tha. Delete karke naya banao aur sample file upload karo.">
+                              <AlertTriangle className="h-3.5 w-3.5" /> Sample missing — delete &amp; recreate
+                            </span>
+                          ) : (
+                            <Button variant="outline" size="sm" onClick={() => handleSubmit(t.id)} title="Submit for Meta approval">
+                              <Send className="h-3.5 w-3.5" /> Submit
+                            </Button>
+                          );
+                        })()}
                         <Button variant="ghost" size="sm" onClick={() => handleDelete(t.id)} className="text-red-600 hover:bg-red-50">
                           <Trash2 className="h-4 w-4" />
                         </Button>

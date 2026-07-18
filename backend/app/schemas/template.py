@@ -23,6 +23,7 @@ class TemplateResponse(BaseModel):
     rejection_reason: str | None
     header_type: str | None
     header_content: str | None
+    header_handle: str | None
     body_text: str
     footer_text: str | None
     buttons: list[dict]

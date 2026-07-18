@@ -15,6 +15,7 @@ export interface TemplateResponse {
   rejection_reason: string | null;
   header_type: string | null;
   header_content: string | null;
+  header_handle: string | null;
   body_text: string;
   footer_text: string | null;
   buttons: TemplateButton[];
