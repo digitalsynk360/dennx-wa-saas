@@ -181,12 +181,28 @@ export default function TemplatesPage() {
   const createTemplate = async () => {
     setSaving(true); setError(null);
     try {
+      let headerHandle: string | null = null;
+      let headerContent: string | null = c.headerType === "text" ? c.headerText : null;
+
+      // Image/video/document headers MUST be uploaded to Meta first —
+      // Meta rejects submissions with just a filename or URL.
+      if (["image", "video", "document"].includes(c.headerType) && c.headerFile) {
+        const fd = new FormData();
+        fd.append("file", c.headerFile);
+        const { data } = await api.post<{ header_handle: string; filename: string }>(
+          "/templates/upload-header-media", fd, { headers: { "Content-Type": "multipart/form-data" } }
+        );
+        headerHandle = data.header_handle;
+        headerContent = data.filename;
+      }
+
       await api.post("/templates", {
         name: c.name,
         language: c.language,
         category: c.category,
         header_type: c.headerType,
-        header_content: c.headerType === "text" ? c.headerText : (c.headerFile?.name || null),
+        header_content: headerContent,
+        header_handle: headerHandle,
         body_text: c.body,
         footer_text: c.footer.trim() || null,
         buttons: c.buttons,

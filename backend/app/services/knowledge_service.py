@@ -52,6 +52,14 @@ async def _set_status(workspace_id: uuid.UUID, **fields) -> None:
     except Exception as e:  # Redis down should never kill the pipeline
         logger.warning("kb_status_write_failed", error=str(e))
 
+    # Push live progress to the AI Chatbot > Knowledge Base tab — this
+    # replaces the 3s polling loop the frontend used to need.
+    try:
+        from app.websocket.manager import manager
+        await manager.broadcast(str(workspace_id), "kb_task_update", data)
+    except Exception as e:
+        logger.warning("kb_status_broadcast_failed", error=str(e))
+
 
 async def get_status(workspace_id: uuid.UUID) -> dict:
     try:

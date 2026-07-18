@@ -9,6 +9,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
+from fastapi.concurrency import run_in_threadpool
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
@@ -20,11 +21,27 @@ TokenType = Literal["access", "refresh"]
 
 
 def hash_password(password: str) -> str:
+    """Synchronous — kept for non-request contexts (scripts, seeds)."""
     return pwd_context.hash(password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Synchronous — kept for non-request contexts (scripts, seeds)."""
     return pwd_context.verify(plain_password, hashed_password)
+
+
+async def hash_password_async(password: str) -> str:
+    """Bcrypt is CPU-bound and takes ~250-300ms per call. Called
+    directly (not awaited) inside an async endpoint, it blocks the
+    ENTIRE event loop for that duration — every other concurrent
+    request on that worker (unrelated users, unrelated endpoints)
+    stalls until it's done. Offloading to FastAPI's threadpool lets
+    other requests keep being served concurrently while this runs."""
+    return await run_in_threadpool(pwd_context.hash, password)
+
+
+async def verify_password_async(plain_password: str, hashed_password: str) -> bool:
+    return await run_in_threadpool(pwd_context.verify, plain_password, hashed_password)
 
 
 def _secret_for(token_type: TokenType) -> str:

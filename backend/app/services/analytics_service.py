@@ -302,6 +302,8 @@ async def get_dashboard_overview(db: AsyncSession, workspace_id: uuid.UUID) -> d
     # Avg response time (reuse existing function)
     avg_response = await _avg_response_time_minutes(db, workspace_id, week_ago)
 
+    meta_insights = await _get_meta_insights(db, workspace_id)
+
     return {
         "conversations": {
             "open": open_convs,
@@ -330,4 +332,58 @@ async def get_dashboard_overview(db: AsyncSession, workspace_id: uuid.UUID) -> d
         },
         "avg_response_minutes": avg_response,
         "daily_chart": daily_chart,
+        "meta_insights": meta_insights,
     }
+
+
+async def _get_meta_insights(db: AsyncSession, workspace_id: uuid.UUID) -> dict | None:
+    """Live counters straight from Meta — All messages / Delivered /
+    Free vs Paid — same numbers as WhatsApp Manager > Insights, for the
+    last 7 days. Returns None (never raises) if account isn't connected
+    or Meta call fails, so the dashboard degrades gracefully."""
+    import time
+    import httpx
+    from app.core.config import settings
+    from app.repositories.whatsapp_repository import WhatsAppRepository
+    from app.services.whatsapp_service import get_decrypted_token
+
+    try:
+        wa_repo = WhatsAppRepository(db)
+        account = await wa_repo.get_by_workspace(workspace_id)
+        if account is None or not account.waba_id:
+            return None
+
+        token = get_decrypted_token(account)
+        now_ts = int(time.time())
+        start_ts = now_ts - 7 * 86400
+
+        url = f"{settings.graph_api_base}/{account.waba_id}"
+        params = {
+            "fields": f"analytics.start({start_ts}).end({now_ts}).granularity(DAY)",
+        }
+        async with httpx.AsyncClient(timeout=12) as client:
+            r = await client.get(url, params=params, headers={"Authorization": f"Bearer {token}"})
+        if r.status_code != 200:
+            return None
+
+        data = r.json().get("analytics", {})
+        points = data.get("data_points", [])
+        total_sent = sum(p.get("sent", 0) for p in points)
+        total_delivered = sum(p.get("delivered", 0) for p in points)
+
+        return {
+            "period": "last_7_days",
+            "sent": total_sent,
+            "delivered": total_delivered,
+            "delivery_rate": round(total_delivered / total_sent * 100, 1) if total_sent else None,
+            "daily": [
+                {
+                    "date": datetime.fromtimestamp(p["start"], tz=timezone.utc).strftime("%d %b"),
+                    "sent": p.get("sent", 0),
+                    "delivered": p.get("delivered", 0),
+                }
+                for p in points
+            ],
+        }
+    except Exception:
+        return None

@@ -205,6 +205,14 @@ export default function InboxPage() {
         if (event.event === "conversation_updated") {
           loadConversations();
         }
+        if (event.event === "message_status_update") {
+          // Delivered/read tick updates — refresh only if that
+          // conversation is currently open.
+          const d = event.data as { conversation_id?: string };
+          if (d?.conversation_id === selectedId) {
+            loadMessages(selectedId!);
+          }
+        }
       },
       [loadConversations, loadMessages, selectedId]
     )

@@ -127,8 +127,19 @@ async def launch_campaign(db: AsyncSession, workspace_id: uuid.UUID, campaign_id
     campaign.started_at = datetime.now(timezone.utc)
     await db.flush()
 
-    # Fire-and-forget background dispatch (no blocking the HTTP request)
-    asyncio.create_task(_run_dispatch(workspace_id, campaign_id))
+    # Prefer Celery — dispatch runs in a separate worker process, so
+    # a large campaign never competes with the API for CPU/DB-pool
+    # time, and survives an API redeploy mid-send. If the broker is
+    # unreachable (e.g. Redis hiccup) we fall back to the old
+    # in-process behavior rather than leaving the campaign stuck in
+    # "running" with nothing actually sending.
+    try:
+        from app.workers.tasks import dispatch_campaign
+        dispatch_campaign.apply_async(args=[str(workspace_id), str(campaign_id)], queue="campaigns")
+        logger.info("campaign_dispatch_queued", campaign_id=str(campaign_id))
+    except Exception as e:
+        logger.warning("celery_unavailable_falling_back", error=str(e))
+        asyncio.create_task(_run_dispatch(workspace_id, campaign_id))
     return campaign
 
 
@@ -174,19 +185,74 @@ async def get_campaign_detail(db: AsyncSession, workspace_id: uuid.UUID, campaig
 # ---------------- Internal dispatch (also callable from Celery) ----------------
 
 async def _run_dispatch(workspace_id: uuid.UUID, campaign_id: uuid.UUID) -> None:
-    """Sends to every pending recipient with Cloud-API-friendly
-    pacing (CAMPAIGN_SEND_RATE_PER_SECOND). Uses its own DB session
-    since it runs detached from the original request."""
+    """Sends to every pending recipient with Cloud-API-friendly pacing
+    (CAMPAIGN_SEND_RATE_PER_SECOND).
+
+    IMPORTANT: unlike a naive implementation, this does NOT hold one
+    DB connection for the campaign's entire run (which can be hours
+    for large recipient lists). A campaign monopolizing a pool
+    connection for that long starves every *other* request on the
+    server — including completely unrelated users just loading their
+    Contacts page. Each iteration below opens a short-lived session,
+    does its work, and immediately returns the connection to the pool
+    before sleeping for the pacing delay.
+    """
+    delay = 1.0 / max(settings.CAMPAIGN_SEND_RATE_PER_SECOND, 1)
+
+    # Load campaign-level info once (template, account, token, recipient ids)
     async with AsyncSessionLocal() as db:
-        try:
-            await dispatch(db, workspace_id, campaign_id)
-            await db.commit()
-        except Exception:
-            await db.rollback()
-            logger.error("campaign_dispatch_failed", campaign_id=str(campaign_id))
+        repo = CampaignRepository(db)
+        campaign = await repo.get_by_id(campaign_id)
+        if campaign is None:
+            return
+        template_repo = TemplateRepository(db)
+        template = await template_repo.get_by_id(campaign.template_id)
+        wa_repo = WhatsAppRepository(db)
+        account = await wa_repo.get_by_workspace(workspace_id)
+        token = get_decrypted_token(account)
+        recipient_repo = CampaignRecipientRepository(db)
+        pending_ids = [r.id for r in await recipient_repo.list_pending(campaign_id)]
+
+    try:
+        for recipient_id in pending_ids:
+            # Fresh, short-lived connection per recipient — held only
+            # for the few ms it takes to send + write the result, then
+            # released back to the pool immediately.
+            async with AsyncSessionLocal() as db:
+                repo = CampaignRepository(db)
+                campaign = await repo.get_by_id(campaign_id)
+                if campaign is None or campaign.status != "running":
+                    break  # deleted, or paused/cancelled by the user mid-run
+
+                recipient_repo = CampaignRecipientRepository(db)
+                recipient = await recipient_repo.get_by_id(recipient_id)
+                if recipient is None or recipient.status != "pending":
+                    continue
+
+                await _send_one_recipient(db, campaign, template, account, token, recipient)
+                await db.commit()
+
+            await asyncio.sleep(delay)
+
+        async with AsyncSessionLocal() as db:
+            repo = CampaignRepository(db)
+            campaign = await repo.get_by_id(campaign_id)
+            if campaign is not None and campaign.status == "running":
+                campaign.status = "completed"
+                campaign.completed_at = datetime.now(timezone.utc)
+                await db.commit()
+
+            await manager.broadcast(
+                str(workspace_id), "campaign_update",
+                {"campaign_id": str(campaign_id), "status": campaign.status if campaign else "completed"},
+            )
+    except Exception:
+        logger.error("campaign_dispatch_failed", campaign_id=str(campaign_id))
 
 
 async def dispatch(db: AsyncSession, workspace_id: uuid.UUID, campaign_id: uuid.UUID) -> None:
+    """Kept for callers that want the old single-session behavior
+    (e.g. tests) — production launches now go through _run_dispatch."""
     repo = CampaignRepository(db)
     campaign = await repo.get_by_id(campaign_id)
     if campaign is None:
@@ -205,7 +271,6 @@ async def dispatch(db: AsyncSession, workspace_id: uuid.UUID, campaign_id: uuid.
     delay = 1.0 / max(settings.CAMPAIGN_SEND_RATE_PER_SECOND, 1)
 
     for recipient in pending:
-        # Re-check status each loop — allows pausing mid-run
         await db.refresh(campaign)
         if campaign.status != "running":
             break
@@ -247,21 +312,85 @@ async def _send_one_recipient(
             template=template,
             variables=recipient.variables or {},
         )
-        # Campaign sends are recorded on the recipient row itself
-        # (status + wamid context); they are not inserted into the
-        # `messages` table because that requires an existing
-        # Conversation row. A future phase can create/attach a
-        # conversation here if unified message history is needed.
         recipient.status = "sent"
         vars_copy = dict(recipient.variables or {})
         vars_copy["_wamid"] = wamid
         recipient.variables = vars_copy
+
+        # Mirror the send into Conversation + Message so it shows up
+        # in the Inbox (get-or-create conversation, same pattern as
+        # inbound webhook handling).
+        try:
+            await _record_campaign_message(db, campaign, account, contact, template, wamid, vars_copy)
+        except Exception as e:
+            logger.error("campaign_message_mirror_failed", error=str(e))
         campaign.sent_count += 1
     except Exception as e:
         recipient.status = "failed"
         recipient.error_message = str(e)[:500]
         campaign.failed_count += 1
         logger.error("campaign_send_failed", contact_id=str(contact.id), error=str(e))
+
+
+def _render_template_preview(template, variables: dict) -> str:
+    """Best-effort human-readable text of what was actually sent,
+    for the Inbox message bubble (Meta doesn't echo the rendered body)."""
+    text = template.body_text or template.name
+    for i in range(1, 10):
+        key = str(i)
+        if key in variables:
+            text = text.replace("{{" + key + "}}", str(variables[key]))
+    return text
+
+
+async def _record_campaign_message(
+    db: AsyncSession, campaign, account, contact: Contact, template, wamid: str, variables: dict,
+) -> None:
+    """Get-or-create the contact's conversation and insert an outbound
+    Message row, so campaign sends appear in Inbox like any other chat."""
+    from app.models.conversation import Conversation
+    from app.models.messaging import Message
+    from app.repositories.conversation_repository import ConversationRepository
+    from app.websocket.manager import manager
+
+    conv_repo = ConversationRepository(db)
+    conv = await conv_repo.get_by_contact(contact.id, campaign.workspace_id)
+    if conv is None:
+        conv = Conversation(
+            workspace_id=campaign.workspace_id,
+            contact_id=contact.id,
+            whatsapp_account_id=account.id,
+            status="open",
+            handling="bot",
+        )
+        db.add(conv)
+        await db.flush()
+
+    preview = _render_template_preview(template, variables)
+    now = datetime.now(timezone.utc)
+
+    msg = Message(
+        workspace_id=campaign.workspace_id,
+        conversation_id=conv.id,
+        contact_id=contact.id,
+        wamid=wamid,
+        direction="outbound",
+        message_type="template",
+        content=preview,
+        status="sent",
+        sent_by_id=None,
+    )
+    db.add(msg)
+
+    conv.last_message_at = now
+    conv.last_message_preview = preview[:255]
+    await db.flush()
+
+    await manager.broadcast(
+        str(campaign.workspace_id),
+        "new_message",
+        {"conversation_id": str(conv.id), "message_id": str(msg.id), "direction": "outbound", "campaign": True},
+    )
 
 
 async def _send_whatsapp_template(

@@ -21,8 +21,8 @@ from app.core.redis import redis_client
 from app.core.security import (
     create_token_pair,
     decode_token,
-    hash_password,
-    verify_password,
+    hash_password_async,
+    verify_password_async,
 )
 from app.models.identity import User, Workspace, WorkspaceMember
 from app.repositories.user_repository import UserRepository
@@ -78,7 +78,7 @@ async def signup(db: AsyncSession, payload: SignupRequest) -> tuple[User, Worksp
     user = User(
         full_name=payload.full_name,
         email=payload.email.lower(),
-        hashed_password=hash_password(payload.password),
+        hashed_password=await hash_password_async(payload.password),
     )
     await user_repo.add(user)
 
@@ -135,7 +135,7 @@ async def login(db: AsyncSession, payload: LoginRequest) -> tuple[User, TokenPai
         detail="Incorrect email or password.",
     )
 
-    if user is None or not verify_password(payload.password, user.hashed_password):
+    if user is None or not await verify_password_async(payload.password, user.hashed_password):
         raise invalid_credentials
 
     if not user.is_active:
@@ -231,7 +231,7 @@ async def reset_password(db: AsyncSession, token: str, new_password: str) -> Non
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
 
-    user.hashed_password = hash_password(new_password)
+    user.hashed_password = await hash_password_async(new_password)
     await db.flush()
     await redis_client.delete(key)
     from app.services.email_service import send_password_reset_success
@@ -241,12 +241,12 @@ async def reset_password(db: AsyncSession, token: str, new_password: str) -> Non
 async def change_password(
     db: AsyncSession, user: User, current_password: str, new_password: str
 ) -> None:
-    if not verify_password(current_password, user.hashed_password):
+    if not await verify_password_async(current_password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Current password is incorrect.",
         )
-    user.hashed_password = hash_password(new_password)
+    user.hashed_password = await hash_password_async(new_password)
     await db.flush()
 
 

@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.core.security import hash_password
+from app.core.security import hash_password_async
 from app.models.identity import User, Workspace, WorkspaceMember
 from app.repositories.user_repository import UserRepository
 from app.repositories.workspace_repository import (
@@ -76,7 +76,7 @@ async def invite_member(
         user = User(
             full_name=payload.full_name,
             email=payload.email.lower(),
-            hashed_password=hash_password(payload.password),
+            hashed_password=await hash_password_async(payload.password),
         )
         await user_repo.add(user)
 

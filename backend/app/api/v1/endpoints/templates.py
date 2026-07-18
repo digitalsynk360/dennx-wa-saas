@@ -9,7 +9,7 @@ Template endpoints — Phase 8. Mounted at /api/v1/templates.
 """
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.dependencies.workspace import WorkspaceContext, require_permission
@@ -18,6 +18,32 @@ from app.schemas.template import CreateTemplateRequest, TemplateListResponse, Te
 from app.services import template_service
 
 router = APIRouter(prefix="/templates", tags=["templates"])
+
+
+@router.post("/upload-header-media")
+async def upload_header_media(
+    file: UploadFile = File(...),
+    ctx: WorkspaceContext = Depends(require_permission("templates.write")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Uploads an image/video/document to Meta and returns the media
+    handle needed as the HEADER example when submitting the template."""
+    allowed_types = {
+        "image/jpeg", "image/png", "video/mp4",
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }
+    if file.content_type not in allowed_types:
+        raise HTTPException(400, f"Unsupported file type: {file.content_type}")
+    content = await file.read()
+    if len(content) > 16 * 1024 * 1024:
+        raise HTTPException(400, "File must be under 16 MB.")
+
+    handle = await template_service.upload_header_media(
+        db, ctx.workspace.id, file.filename or "upload", file.content_type, content,
+    )
+    return {"header_handle": handle, "filename": file.filename}
 
 
 @router.get("", response_model=TemplateListResponse)

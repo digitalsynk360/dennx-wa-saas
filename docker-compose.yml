@@ -42,6 +42,52 @@ services:
       retries: 3
       start_period: 40s
 
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: limbu_celery_worker
+    # Separate process from the API — a burst of campaigns/KB-crawls
+    # now competes with nothing but itself for CPU and DB-pool slots,
+    # so app.deenxconsultancy.com stays responsive no matter how much
+    # background work is queued.
+    command: celery -A app.core.celery_app worker --loglevel=info --concurrency=4 -Q default,webhooks,campaigns,ai
+    restart: unless-stopped
+    env_file: .env.production
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    networks:
+      - limbu_net
+    volumes:
+      - backend_logs:/app/logs
+
+  celery_beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: limbu_celery_beat
+    # Runs the periodic jobs (template status sync, stale-session
+    # cleanup) — one instance only, never scale this one horizontally.
+    command: celery -A app.core.celery_app beat --loglevel=info
+    restart: unless-stopped
+    env_file: .env.production
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    networks:
+      - limbu_net
+
   frontend:
     build:
       context: ./frontend

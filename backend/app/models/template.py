@@ -19,6 +19,7 @@ class Template(Base, UUIDMixin, TimestampMixin, TenantMixin):
     rejection_reason: Mapped[str | None] = mapped_column(Text)
     header_type: Mapped[str | None] = mapped_column(String(16))  # none|text|image|document|video
     header_content: Mapped[str | None] = mapped_column(Text)
+    header_handle: Mapped[str | None] = mapped_column(Text)  # Meta resumable-upload media handle (for image/video/document headers)
     body_text: Mapped[str] = mapped_column(Text, nullable=False)
     footer_text: Mapped[str | None] = mapped_column(String(255))
     buttons: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)

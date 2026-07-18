@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { format } from "date-fns";
 import { CheckCircle2, Loader2, Megaphone, Pause, Play, Plus, Search, Send as SendIcon, X } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
+import { useWorkspaceWebSocket } from "@/hooks/shared/use-workspace-ws";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -56,28 +57,46 @@ export default function CampaignsPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Campaign detail (per-recipient) — polls every 4s while open & active
+  // Live updates via WebSocket — no more polling. Backend pushes
+  // "campaign_update" (status changes) and "campaign_recipient_update"
+  // (every delivered/read/failed webhook) the instant they happen.
+  const handleWsEvent = useCallback((msg: { event: string; data: unknown }) => {
+    if (msg.event === "campaign_update") {
+      const d = msg.data as { campaign_id: string; status: string };
+      setCampaigns((prev) => prev.map((c) => (c.id === d.campaign_id ? { ...c, status: d.status } : c)));
+    }
+    if (msg.event === "campaign_recipient_update") {
+      const d = msg.data as {
+        campaign_id: string; recipient_id: string; status: string; error_message: string | null;
+        total_count: number; sent_count: number; delivered_count: number; read_count: number; failed_count: number;
+      };
+      // Update the campaigns list row counts
+      setCampaigns((prev) => prev.map((c) => (
+        c.id === d.campaign_id
+          ? { ...c, sent_count: d.sent_count, delivered_count: d.delivered_count, read_count: d.read_count, failed_count: d.failed_count }
+          : c
+      )));
+      // Update the open detail modal, if this campaign is the one shown
+      setDetail((prev) => {
+        if (!prev || prev.id !== d.campaign_id) return prev;
+        return {
+          ...prev,
+          total_count: d.total_count, sent_count: d.sent_count, delivered_count: d.delivered_count,
+          read_count: d.read_count, failed_count: d.failed_count,
+          recipients: prev.recipients.map((r) => (
+            r.id === d.recipient_id ? { ...r, status: d.status, error_message: d.error_message } : r
+          )),
+        };
+      });
+    }
+  }, []);
+  useWorkspaceWebSocket(handleWsEvent);
+
+  // Fetch detail once when the modal opens (subsequent updates come via WS above)
   useEffect(() => {
     if (!detailId) { setDetail(null); return; }
-    let stop = false;
-    const fetchDetail = async () => {
-      try {
-        const { data } = await api.get(`/campaigns/${detailId}`);
-        if (!stop) setDetail(data);
-      } catch { if (!stop) setError("Detail load failed"); }
-    };
-    fetchDetail();
-    const t = setInterval(fetchDetail, 4000);
-    return () => { stop = true; clearInterval(t); };
+    api.get(`/campaigns/${detailId}`).then(({ data }) => setDetail(data)).catch(() => setError("Detail load failed"));
   }, [detailId]);
-
-  // Auto-refresh every 5s while any campaign is active
-  useEffect(() => {
-    const active = campaigns.some((c) => ["running", "sending"].includes(c.status));
-    if (!active) return;
-    const t = setInterval(load, 5000);
-    return () => clearInterval(t);
-  }, [campaigns, load]);
 
   const openModal = async () => {
     setModalOpen(true);

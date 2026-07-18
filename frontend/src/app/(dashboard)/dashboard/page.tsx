@@ -25,6 +25,13 @@ interface DashboardData {
   flows: { active: number; active_sessions: number };
   avg_response_minutes: number | null;
   daily_chart: { date: string; inbound: number; outbound: number }[];
+  meta_insights: {
+    period: string;
+    sent: number;
+    delivered: number;
+    delivery_rate: number | null;
+    daily: { date: string; sent: number; delivered: number }[];
+  } | null;
 }
 
 function StatCard({
@@ -201,6 +208,43 @@ export default function DashboardPage() {
           </BarChart>
         </ResponsiveContainer>
       </div>
+
+      {/* ── Meta WhatsApp Insights (live from Meta, last 7 days) ── */}
+      {data.meta_insights && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-700">WhatsApp Insights (Meta) — Last 7 Days</h2>
+            <span className="text-[10px] uppercase tracking-wide text-gray-400">Live from WhatsApp Manager</span>
+          </div>
+          <div className="mb-4 grid grid-cols-3 gap-3">
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-center">
+              <p className="text-xl font-bold text-gray-800">{data.meta_insights.sent}</p>
+              <p className="text-xs text-gray-500">Messages Sent</p>
+            </div>
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-center">
+              <p className="text-xl font-bold text-green-600">{data.meta_insights.delivered}</p>
+              <p className="text-xs text-gray-500">Delivered</p>
+            </div>
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-center">
+              <p className="text-xl font-bold text-blue-600">
+                {data.meta_insights.delivery_rate !== null ? `${data.meta_insights.delivery_rate}%` : "—"}
+              </p>
+              <p className="text-xs text-gray-500">Delivery Rate</p>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={data.meta_insights.daily} barGap={4}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={{ borderRadius: 10, border: "1px solid #e5e7eb", fontSize: 13 }} cursor={{ fill: "#f9fafb" }} />
+              <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+              <Bar dataKey="sent" name="Sent" fill="#94a3b8" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="delivered" name="Delivered" fill="#22c55e" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       {/* ── Handling split + Recent conversations ── */}
       <div className="grid gap-4 lg:grid-cols-3">

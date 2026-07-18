@@ -36,6 +36,7 @@ class CreateTemplateRequest(BaseModel):
     category: str = Field(description="MARKETING | UTILITY | AUTHENTICATION")
     header_type: str | None = Field(default="none")
     header_content: str | None = None
+    header_handle: str | None = None
     body_text: str = Field(min_length=1)
     footer_text: str | None = None
     buttons: list[TemplateButton] = Field(default_factory=list)

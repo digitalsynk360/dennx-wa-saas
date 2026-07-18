@@ -318,6 +318,7 @@ async def _handle_status_update(
 ) -> None:
     from datetime import datetime, timezone
     from app.repositories.conversation_repository import MessageRepository
+    from app.websocket.manager import manager
 
     wamid      = status_update.get("id")
     new_status = status_update.get("status")
@@ -339,6 +340,15 @@ async def _handle_status_update(
         elif new_status == "failed":
             msg.status = "failed"
 
+        await db.flush()
+        # Push to Inbox instantly — no more waiting on a poll to see
+        # single/double-tick or read status change.
+        await manager.broadcast(
+            str(workspace_id),
+            "message_status_update",
+            {"conversation_id": str(msg.conversation_id), "message_id": str(msg.id), "status": msg.status},
+        )
+
     # ── 2. Campaign recipients (wamid stored in variables JSONB) ──
     from app.models.campaign import Campaign, CampaignRecipient
 
@@ -354,14 +364,17 @@ async def _handle_status_update(
     if row is not None:
         recipient, campaign = row
         prev = recipient.status
+        changed = False
         if new_status == "delivered" and prev in ("sent", "pending"):
             recipient.status = "delivered"
             campaign.delivered_count += 1
+            changed = True
         elif new_status == "read" and prev in ("sent", "delivered", "pending"):
             if prev != "delivered":
                 campaign.delivered_count += 1
             recipient.status = "read"
             campaign.read_count += 1
+            changed = True
         elif new_status == "failed" and prev != "failed":
             recipient.status = "failed"
             campaign.failed_count += 1
@@ -370,5 +383,26 @@ async def _handle_status_update(
                 e0 = errs[0]
                 detail = (e0.get("error_data") or {}).get("details") or e0.get("message") or e0.get("title") or ""
                 recipient.error_message = f"[{e0.get('code','')}] {detail}"[:500]
+            changed = True
+
+        if changed:
+            await db.flush()
+            # Push updated counters straight to the Campaigns page —
+            # this is what replaces the 4-5s polling loop.
+            await manager.broadcast(
+                str(workspace_id),
+                "campaign_recipient_update",
+                {
+                    "campaign_id": str(campaign.id),
+                    "recipient_id": str(recipient.id),
+                    "status": recipient.status,
+                    "error_message": recipient.error_message,
+                    "total_count": campaign.total_count,
+                    "sent_count": campaign.sent_count,
+                    "delivered_count": campaign.delivered_count,
+                    "read_count": campaign.read_count,
+                    "failed_count": campaign.failed_count,
+                },
+            )
 
     await db.flush()

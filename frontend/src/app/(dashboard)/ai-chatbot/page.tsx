@@ -8,6 +8,7 @@ import {
 
 import { Bar, BarChart, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Topbar } from "@/components/layout/topbar";
+import { useWorkspaceWebSocket } from "@/hooks/shared/use-workspace-ws";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -151,13 +152,16 @@ export default function AiChatbotPage() {
 
   useEffect(() => { if (tab === "knowledge") loadKb(); }, [tab, loadKb]);
 
-  // Poll while a KB task is running
-  useEffect(() => {
-    const running = ["crawling", "processing", "reindexing"].includes(kbStats?.task?.state || "");
-    if (tab !== "knowledge" || !running) return;
-    const t = setInterval(loadKb, 3000);
-    return () => clearInterval(t);
-  }, [tab, kbStats?.task?.state, loadKb]);
+  // Live task progress via WebSocket — replaces the old 3s poll.
+  // Backend pushes "kb_task_update" on every crawl page / upload chunk.
+  const handleKbWsEvent = useCallback((msg: { event: string; data: unknown }) => {
+    if (msg.event !== "kb_task_update") return;
+    const task = msg.data as { state?: string; pages_done?: number; chunks_done?: number; error?: string; filename?: string; url?: string };
+    setKbStats((prev) => (prev ? { ...prev, task: { ...prev.task, ...task } } : prev));
+    // Once a task finishes, refresh the stats/doc list once (counts, last_sync, docs table)
+    if (task.state === "done" || task.state === "error") loadKb();
+  }, [loadKb]);
+  useWorkspaceWebSocket(handleKbWsEvent);
 
   const startCrawl = async () => {
     if (!crawlUrl.trim()) return;
