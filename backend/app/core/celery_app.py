@@ -19,6 +19,15 @@ celery_app = Celery(
     include=["app.workers.tasks"],
 )
 
+# Upstash (and most managed Redis) serve over rediss:// (TLS). Newer
+# redis-py/Celery versions require ssl_cert_reqs to be explicit for
+# rediss:// URLs — without this the worker/beat crash on startup with
+# "A rediss:// URL must have parameter ssl_cert_reqs...". CERT_NONE
+# matches the trust model REDIS_URL already uses elsewhere in the app.
+import ssl as _ssl
+_redis_ssl_opts = {"ssl_cert_reqs": _ssl.CERT_NONE}
+_uses_ssl = settings.CELERY_BROKER_URL.startswith("rediss://")
+
 celery_app.conf.update(
     task_serializer="json",
     result_serializer="json",
@@ -50,4 +59,5 @@ celery_app.conf.update(
             "schedule": 600.0,
         },
     },
+    **({"broker_use_ssl": _redis_ssl_opts, "redis_backend_use_ssl": _redis_ssl_opts} if _uses_ssl else {}),
 )
