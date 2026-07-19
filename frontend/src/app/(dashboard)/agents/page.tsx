@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { api } from "@/lib/api";
+import { api, getErrorMessage } from "@/lib/api";
 import type { AgentResponse } from "@/types/billing";
 
 interface Role { name: string; display_name: string }
@@ -49,8 +49,7 @@ export default function AgentsPage() {
       setInviteOpen(false); setInviteEmail(""); setInviteRole("agent");
       await load();
     } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(msg || "Invite failed");
+      setError(getErrorMessage(e, "Invite failed"));
     } finally { setSaving(false); }
   };
 

@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { api } from "@/lib/api";
+import { api, getErrorMessage } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface Category { id: string; name: string; description: string | null; sort_order: number }
@@ -106,8 +106,7 @@ export default function CataloguePage() {
       setProductModal(null);
       await load();
     } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(msg || "Save failed");
+      setError(getErrorMessage(e, "Save failed"));
     } finally { setSaving(false); }
   };
 

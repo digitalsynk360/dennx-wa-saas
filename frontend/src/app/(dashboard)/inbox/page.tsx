@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/context/auth-context";
 import { useInboxWebSocket } from "@/hooks/inbox/use-inbox-ws";
-import { api } from "@/lib/api";
+import { api, getErrorMessage } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type {
   ConversationListResponse,
@@ -248,9 +248,7 @@ export default function InboxPage() {
       );
       setSendText(data.suggestion);
     } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { detail?: string } } })
-        ?.response?.data?.detail;
-      setError(msg || "AI suggest failed — check OPENAI_API_KEY");
+      setError(getErrorMessage(e, "AI suggest failed — check OPENAI_API_KEY"));
     } finally {
       setSuggesting(false);
     }

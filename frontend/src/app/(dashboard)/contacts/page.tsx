@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { api } from "@/lib/api";
+import { api, getErrorMessage } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { ContactListResponse, ContactResponse, ImportResult, TagResponse } from "@/types/contacts";
 
@@ -81,8 +81,7 @@ export default function ContactsPage() {
       setSuccess("Contact added!");
       await load();
     } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(msg || "Failed to add contact");
+      setError(getErrorMessage(e, "Failed to add contact"));
     } finally { setSaving(false); }
   };
 
@@ -159,8 +158,7 @@ export default function ContactsPage() {
       setImportSelectedTags((s) => new Set(s).add(tag.id));
       setImportNewTag("");
     } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(msg || "Tag create failed");
+      setError(getErrorMessage(e, "Tag create failed"));
     }
   };
 
@@ -239,8 +237,7 @@ export default function ContactsPage() {
       setEditNewTag("");
       await editAttachTag(tag.id);
     } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(msg || "Tag create failed");
+      setError(getErrorMessage(e, "Tag create failed"));
     }
   };
 

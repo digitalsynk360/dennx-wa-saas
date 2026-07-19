@@ -11,7 +11,7 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { api } from "@/lib/api";
+import { api, getErrorMessage } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { TemplateButton, TemplateListResponse, TemplateResponse } from "@/types/templates";
 
@@ -120,8 +120,7 @@ export default function TemplatesPage() {
   const handleSubmit = async (id: string) => {
     try { await api.post(`/templates/${id}/submit`); setSuccess("Submitted to Meta for approval"); await load(); }
     catch (e: unknown) {
-      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(msg || "Submit failed — WhatsApp account connected hai?");
+      setError(getErrorMessage(e, "Submit failed — WhatsApp account connected hai?"));
     }
   };
 
@@ -220,8 +219,7 @@ export default function TemplatesPage() {
       setC({ ...EMPTY_CREATOR });
       await load();
     } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(typeof msg === "string" ? msg : "Create failed — name unique hona chahiye.");
+      setError(getErrorMessage(e, "Create failed — name unique hona chahiye."));
     } finally { setSaving(false); }
   };
 

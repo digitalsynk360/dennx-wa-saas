@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { api } from "@/lib/api";
+import { api, getErrorMessage } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { CampaignListResponse, CampaignResponse } from "@/types/campaigns";
 import type { TagResponse } from "@/types/contacts";
@@ -135,8 +135,7 @@ export default function CampaignsPage() {
       setSuccess("Campaign created. Click Launch to send.");
       setTimeout(() => setSuccess(null), 4000);
     } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(msg || "Failed to create campaign");
+      setError(getErrorMessage(e, "Failed to create campaign"));
     } finally { setSaving(false); }
   };
 

@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { api } from "@/lib/api";
+import { api, getErrorMessage } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 // ─── Types ───────────────────────────────────────────────────────────────
@@ -171,8 +171,7 @@ export default function AiChatbotPage() {
       setSuccess("Crawl started! Progress neeche live dikhega.");
       await loadKb();
     } catch (e: unknown) {
-      const m = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(m || "Crawl start failed");
+      setError(getErrorMessage(e, "Crawl start failed"));
     } finally { setKbBusy(false); }
   };
 
@@ -187,8 +186,7 @@ export default function AiChatbotPage() {
       setSuccess(`${file.name} processing started!`);
       await loadKb();
     } catch (err: unknown) {
-      const m = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(m || "Upload failed");
+      setError(getErrorMessage(err, "Upload failed"));
     } finally { setKbBusy(false); e.target.value = ""; }
   };
 
@@ -318,8 +316,7 @@ export default function AiChatbotPage() {
       setTimeout(() => setSuccess(null), 2500);
       await load();
     } catch (e: unknown) {
-      const m = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(typeof m === "string" ? m : "Save failed");
+      setError(getErrorMessage(e, "Save failed"));
     } finally { setSaving(false); }
   };
 

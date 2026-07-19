@@ -90,3 +90,35 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+/**
+ * Safely extracts a human-readable error string from any Axios/API
+ * error shape. FastAPI's `detail` field is NOT always a string —
+ * Pydantic validation failures (422s) return it as an array of
+ * `{type, loc, msg}` objects instead. Passing that array/object
+ * straight into React (`{error}`) crashes with "Objects are not
+ * valid as a React child" (minified error #31) — every catch block
+ * in the app should route through this instead of reading
+ * `err.response.data.detail` directly.
+ */
+export function getErrorMessage(err: unknown, fallback = "Something went wrong"): string {
+  const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+
+  if (typeof detail === "string" && detail.trim()) return detail;
+
+  if (Array.isArray(detail)) {
+    const msgs = detail
+      .map((d) => (typeof d === "object" && d !== null && "msg" in d ? String((d as { msg: unknown }).msg) : null))
+      .filter((m): m is string => Boolean(m));
+    if (msgs.length) return msgs.join("; ");
+  }
+
+  if (detail && typeof detail === "object") {
+    const maybeMsg = (detail as { msg?: unknown; message?: unknown }).msg ?? (detail as { message?: unknown }).message;
+    if (typeof maybeMsg === "string") return maybeMsg;
+  }
+
+  if (err instanceof Error && err.message) return err.message;
+
+  return fallback;
+}
