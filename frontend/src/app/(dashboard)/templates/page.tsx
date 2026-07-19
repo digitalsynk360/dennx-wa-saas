@@ -199,7 +199,7 @@ export default function TemplatesPage() {
         headerContent = data.filename;
       }
 
-      await api.post("/templates", {
+      const { data: created } = await api.post<{ status: string; rejection_reason: string | null }>("/templates", {
         name: c.name,
         language: c.language,
         category: c.category,
@@ -211,7 +211,11 @@ export default function TemplatesPage() {
         buttons: c.buttons,
         variable_samples: {},
       });
-      setSuccess("Template created as draft! Table mein Submit button se Meta approval bhejo.");
+      if (created.status === "rejected") {
+        setError(`Meta ne reject kiya: ${created.rejection_reason || "Unknown reason"}`);
+      } else {
+        setSuccess("Template Meta ko submit ho gaya — approval ka wait karo!");
+      }
       setCreatorOpen(false);
       setC({ ...EMPTY_CREATOR });
       await load();
@@ -287,15 +291,21 @@ export default function TemplatesPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1">
-                        {(t.status === "draft" || t.status === "pending") && (() => {
+                        {/* Templates now submit to Meta automatically on create.
+                            A leftover "pending"/"draft" row only happens for
+                            templates created before this change, or a
+                            "rejected" one that never actually reached Meta
+                            (e.g. network hiccup, no meta_template_id) — those
+                            get a Retry button instead of a permanent dead end. */}
+                        {(t.status === "draft" || (t.status === "rejected" && !t.meta_template_id)) && (() => {
                           const needsMedia = ["image", "video", "document"].includes(t.header_type || "") && !t.header_handle;
                           return needsMedia ? (
-                            <span className="flex items-center gap-1 text-xs text-red-600" title="Yeh template incomplete hai — header sample upload nahi hua tha. Delete karke naya banao aur sample file upload karo.">
-                              <AlertTriangle className="h-3.5 w-3.5" /> Sample missing — delete &amp; recreate
+                            <span className="flex items-center gap-1 text-xs text-red-600" title="Header sample missing — delete karke naya banao, sample file upload karke.">
+                              <AlertTriangle className="h-3.5 w-3.5" /> Sample missing
                             </span>
                           ) : (
-                            <Button variant="outline" size="sm" onClick={() => handleSubmit(t.id)} title="Submit for Meta approval">
-                              <Send className="h-3.5 w-3.5" /> Submit
+                            <Button variant="outline" size="sm" onClick={() => handleSubmit(t.id)} title="Retry submit to Meta">
+                              <Send className="h-3.5 w-3.5" /> Retry Submit
                             </Button>
                           );
                         })()}

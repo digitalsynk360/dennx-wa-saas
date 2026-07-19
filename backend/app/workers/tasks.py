@@ -30,10 +30,34 @@ from app.core.celery_app import celery_app
 logger = get_task_logger(__name__)
 
 
+async def _with_engine_cleanup(coro):
+    """Runs coro, then disposes the async engine's connection pool —
+    all on the SAME event loop the coro ran on. Disposing from a
+    *separate* asyncio.run() call (a different loop) doesn't work:
+    asyncpg connections remember the loop that created them, so
+    closing them from a different loop still raises "Event loop is
+    closed". Must clean up before this loop exits."""
+    try:
+        return await coro
+    finally:
+        from app.core.database import engine
+        await engine.dispose()
+
+
 def _run_async(coro):
     """Runs an async coroutine to completion inside a sync Celery
-    task, on a fresh event loop dedicated to this task execution."""
-    return asyncio.run(coro)
+    task, on a fresh event loop dedicated to this task execution.
+
+    IMPORTANT: the async DB engine (app.core.database.engine) is a
+    module-level singleton whose connection pool holds asyncpg
+    connections bound to whichever event loop created them. Since
+    asyncio.run() here creates a brand new loop per task and closes
+    it on exit, any pooled connection would blow up with "RuntimeError:
+    Event loop is closed" the next time something tries to use/close
+    it under a different loop. Disposing the pool at the end of THIS
+    SAME loop (see _with_engine_cleanup) forces fresh connections
+    under the next task's own loop instead."""
+    return asyncio.run(_with_engine_cleanup(coro))
 
 
 @celery_app.task(name="app.workers.tasks.health_check")

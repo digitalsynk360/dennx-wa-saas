@@ -97,6 +97,13 @@ async def list_templates(db: AsyncSession, workspace_id: uuid.UUID) -> list[Temp
 async def create_template(
     db: AsyncSession, workspace_id: uuid.UUID, payload: CreateTemplateRequest
 ) -> Template:
+    """Creates the template locally AND immediately submits it to Meta
+    in the same call — there is no separate manual "Submit" step
+    anymore. If Meta rejects it (duplicate content, missing sample,
+    etc.) the template is still saved locally with status="rejected"
+    and rejection_reason set, so nothing is lost and the user sees
+    exactly why — they just re-create with a fix instead of hunting
+    for a Submit button."""
     repo = TemplateRepository(db)
     existing = await repo.get_by_name(workspace_id, payload.name, payload.language)
     if existing:
@@ -117,16 +124,32 @@ async def create_template(
         variable_samples=payload.variable_samples,
     )
     await repo.add(template)
+    await db.flush()
+
+    try:
+        await _submit_to_meta_internal(db, workspace_id, template)
+    except HTTPException as e:
+        # Meta rejected it (or account not connected) — keep the local
+        # row so the user can see why, instead of losing their draft.
+        template.status = "rejected"
+        template.rejection_reason = str(e.detail)[:500]
+        await db.flush()
+
     return template
 
 
 async def submit_to_meta(db: AsyncSession, workspace_id: uuid.UUID, template_id: uuid.UUID) -> Template:
-    """Submits a draft template to Meta for approval."""
+    """Manual retry path — kept for templates that failed the
+    automatic submit-on-create (e.g. a transient network error) so
+    they aren't permanently stuck without a way to try again."""
     repo = TemplateRepository(db)
     template = await repo.get_by_id(template_id)
     if template is None or template.workspace_id != workspace_id:
         raise HTTPException(status_code=404, detail="Template not found.")
+    return await _submit_to_meta_internal(db, workspace_id, template)
 
+
+async def _submit_to_meta_internal(db: AsyncSession, workspace_id: uuid.UUID, template: Template) -> Template:
     wa_repo = WhatsAppRepository(db)
     account = await wa_repo.get_by_workspace(workspace_id)
     if account is None or account.status != "live":
@@ -156,6 +179,7 @@ async def submit_to_meta(db: AsyncSession, workspace_id: uuid.UUID, template_id:
     data = response.json()
     template.meta_template_id = data.get("id")
     template.status = "pending"
+    template.rejection_reason = None
     await db.flush()
     return template
 
