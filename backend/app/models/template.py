@@ -19,7 +19,8 @@ class Template(Base, UUIDMixin, TimestampMixin, TenantMixin):
     rejection_reason: Mapped[str | None] = mapped_column(Text)
     header_type: Mapped[str | None] = mapped_column(String(16))  # none|text|image|document|video
     header_content: Mapped[str | None] = mapped_column(Text)
-    header_handle: Mapped[str | None] = mapped_column(Text)  # Meta resumable-upload media handle (for image/video/document headers)
+    header_handle: Mapped[str | None] = mapped_column(Text)  # Meta resumable-upload handle — submission-time example only, NOT reusable for sends
+    header_media_id: Mapped[str | None] = mapped_column(Text)  # Meta persistent Media API id — reused on every campaign send
     body_text: Mapped[str] = mapped_column(Text, nullable=False)
     footer_text: Mapped[str | None] = mapped_column(String(255))
     buttons: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)

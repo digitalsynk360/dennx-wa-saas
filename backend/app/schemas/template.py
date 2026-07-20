@@ -24,6 +24,7 @@ class TemplateResponse(BaseModel):
     header_type: str | None
     header_content: str | None
     header_handle: str | None
+    header_media_id: str | None
     body_text: str
     footer_text: str | None
     buttons: list[dict]
@@ -38,6 +39,7 @@ class CreateTemplateRequest(BaseModel):
     header_type: str | None = Field(default="none")
     header_content: str | None = None
     header_handle: str | None = None
+    header_media_id: str | None = None
     body_text: str = Field(min_length=1)
     footer_text: str | None = None
     buttons: list[TemplateButton] = Field(default_factory=list)

@@ -398,6 +398,29 @@ async def _send_whatsapp_template(
 ) -> str:
     url = f"{settings.graph_api_base}/{phone_number_id}/messages"
     components = []
+
+    # A template APPROVED with an IMAGE/VIDEO/DOCUMENT header REQUIRES
+    # a matching header parameter on every single send — Meta rejects
+    # the message with "Format mismatch, expected IMAGE, received
+    # UNKNOWN" if this component is missing, even though the header
+    # has no {{variables}} of its own. header_media_id is the
+    # persistent Meta Media API id captured when the file was
+    # uploaded in the template editor (see template_service.upload_header_media).
+    if template.header_type in ("image", "video", "document"):
+        if not template.header_media_id:
+            raise RuntimeError(
+                f"This template's {template.header_type} header has no media on file — "
+                "delete it and recreate with the sample file uploaded (older templates "
+                "created before media-header support won't have this)."
+            )
+        components.append({
+            "type": "header",
+            "parameters": [{
+                "type": template.header_type,
+                template.header_type: {"id": template.header_media_id},
+            }],
+        })
+
     if variables:
         components.append({
             "type": "body",

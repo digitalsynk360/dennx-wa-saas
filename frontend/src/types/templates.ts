@@ -16,6 +16,7 @@ export interface TemplateResponse {
   header_type: string | null;
   header_content: string | null;
   header_handle: string | null;
+  header_media_id: string | null;
   body_text: string;
   footer_text: string | null;
   buttons: TemplateButton[];

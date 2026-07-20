@@ -184,17 +184,21 @@ export default function TemplatesPage() {
     setSaving(true); setError(null);
     try {
       let headerHandle: string | null = null;
+      let headerMediaId: string | null = null;
       let headerContent: string | null = c.headerType === "text" ? c.headerText : null;
 
       // Image/video/document headers MUST be uploaded to Meta first —
-      // Meta rejects submissions with just a filename or URL.
+      // Meta rejects submissions with just a filename or URL. This
+      // also captures header_media_id, which is what actual campaign
+      // sends use later (separate from the submission-only handle).
       if (["image", "video", "document"].includes(c.headerType) && c.headerFile) {
         const fd = new FormData();
         fd.append("file", c.headerFile);
-        const { data } = await api.post<{ header_handle: string; filename: string }>(
+        const { data } = await api.post<{ header_handle: string; header_media_id: string; filename: string }>(
           "/templates/upload-header-media", fd, { headers: { "Content-Type": "multipart/form-data" } }
         );
         headerHandle = data.header_handle;
+        headerMediaId = data.header_media_id;
         headerContent = data.filename;
       }
 
@@ -205,6 +209,7 @@ export default function TemplatesPage() {
         header_type: c.headerType,
         header_content: headerContent,
         header_handle: headerHandle,
+        header_media_id: headerMediaId,
         body_text: c.body,
         footer_text: c.footer.trim() || null,
         buttons: c.buttons,
@@ -296,7 +301,7 @@ export default function TemplatesPage() {
                             (e.g. network hiccup, no meta_template_id) — those
                             get a Retry button instead of a permanent dead end. */}
                         {(t.status === "draft" || (t.status === "rejected" && !t.meta_template_id)) && (() => {
-                          const needsMedia = ["image", "video", "document"].includes(t.header_type || "") && !t.header_handle;
+                          const needsMedia = ["image", "video", "document"].includes(t.header_type || "") && !t.header_media_id;
                           return needsMedia ? (
                             <span className="flex items-center gap-1 text-xs text-red-600" title="Header sample missing — delete karke naya banao, sample file upload karke.">
                               <AlertTriangle className="h-3.5 w-3.5" /> Sample missing

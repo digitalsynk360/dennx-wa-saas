@@ -27,11 +27,22 @@ logger = get_logger(__name__)
 
 async def upload_header_media(
     db: AsyncSession, workspace_id: uuid.UUID, filename: str, content_type: str, content: bytes,
-) -> str:
-    """Uploads a header image/video/document to Meta's resumable upload
-    API and returns the media handle Meta requires as the template's
-    HEADER example (`example.header_handle`). Without this, Meta
-    rejects any IMAGE/VIDEO/DOCUMENT header template on submit."""
+) -> tuple[str, str]:
+    """Uploads a header image/video/document TWICE, to two different
+    Meta endpoints that serve two different purposes:
+
+      1. Resumable Upload API -> a one-time-use "handle" required as
+         the HEADER example when SUBMITTING the template for approval.
+         This handle is not meant to be reused for actual sends.
+      2. Standard Media API   -> a persistent "media id" that stays
+         valid on Meta's side and is what actually gets referenced
+         every time a campaign SENDS this template
+         (components: [{type: header, parameters: [{type: image,
+         image: {id: media_id}}]}]). Without this second upload,
+         every real send fails with "Format mismatch, expected IMAGE,
+         received UNKNOWN" because no image reference is sent at all.
+
+    Returns (header_handle, header_media_id)."""
     wa_repo = WhatsAppRepository(db)
     account = await wa_repo.get_by_workspace(workspace_id)
     if account is None or account.status != "live":
@@ -41,7 +52,7 @@ async def upload_header_media(
 
     token = get_decrypted_token(account)
 
-    # 1) Create an upload session
+    # ── 1) Resumable upload -> submission-time example handle ──
     session_url = f"{settings.graph_api_base}/{settings.META_APP_ID}/uploads"
     async with httpx.AsyncClient(timeout=20) as client:
         session_resp = await client.post(
@@ -60,7 +71,6 @@ async def upload_header_media(
     if not upload_session_id:
         raise HTTPException(status_code=502, detail="Meta did not return an upload session id.")
 
-    # 2) Push the actual bytes to that session
     upload_url = f"{settings.graph_api_base}/{upload_session_id}"
     async with httpx.AsyncClient(timeout=60) as client:
         upload_resp = await client.post(
@@ -78,7 +88,24 @@ async def upload_header_media(
     handle = upload_resp.json().get("h")
     if not handle:
         raise HTTPException(status_code=502, detail="Meta did not return a media handle.")
-    return handle
+
+    # ── 2) Standard Media API -> persistent id reused on every send ──
+    media_url = f"{settings.graph_api_base}/{account.phone_number_id}/media"
+    async with httpx.AsyncClient(timeout=30) as client:
+        media_resp = await client.post(
+            media_url,
+            data={"messaging_product": "whatsapp", "type": content_type},
+            files={"file": (filename, content, content_type)},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    if media_resp.status_code not in (200, 201):
+        logger.error("meta_media_upload_failed", body=media_resp.text)
+        raise HTTPException(status_code=502, detail=f"Meta media upload failed: {media_resp.text[:200]}")
+
+    media_id = media_resp.json().get("id")
+    if not media_id:
+        raise HTTPException(status_code=502, detail="Meta did not return a media id.")
+    return handle, media_id
 
 META_STATUS_MAP = {
     "APPROVED": "approved",
@@ -118,6 +145,7 @@ async def create_template(
         header_type=payload.header_type,
         header_content=payload.header_content,
         header_handle=payload.header_handle,
+        header_media_id=payload.header_media_id,
         body_text=payload.body_text,
         footer_text=payload.footer_text,
         buttons=[b.model_dump(exclude_none=True) for b in payload.buttons],

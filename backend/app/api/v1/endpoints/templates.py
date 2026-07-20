@@ -40,10 +40,10 @@ async def upload_header_media(
     if len(content) > 16 * 1024 * 1024:
         raise HTTPException(400, "File must be under 16 MB.")
 
-    handle = await template_service.upload_header_media(
+    handle, media_id = await template_service.upload_header_media(
         db, ctx.workspace.id, file.filename or "upload", file.content_type, content,
     )
-    return {"header_handle": handle, "filename": file.filename}
+    return {"header_handle": handle, "header_media_id": media_id, "filename": file.filename}
 
 
 @router.get("", response_model=TemplateListResponse)
