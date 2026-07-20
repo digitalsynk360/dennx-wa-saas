@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  AlertTriangle, Check, CheckCircle2, FileText, Image as ImageIcon, Link2, Megaphone,
+  AlertTriangle, Check, CheckCircle2, FileText, Image as ImageIcon, Link2, Loader2, Megaphone,
   Phone, Plus, RefreshCw, Search, Send, Settings2, ShieldCheck, Trash2,
   Type, Video, X,
 } from "lucide-react";
@@ -99,6 +99,7 @@ export default function TemplatesPage() {
   const [langOpen, setLangOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [loading, setLoading] = useState(true);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   const load = useCallback(async () => {
@@ -106,6 +107,7 @@ export default function TemplatesPage() {
       const { data } = await api.get<TemplateListResponse>("/templates");
       setTemplates(data.items);
     } catch { setError("Failed to load templates"); }
+    finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -319,7 +321,11 @@ export default function TemplatesPage() {
                     </td>
                   </tr>
                 ))}
-                {templates.length === 0 && (
+                {loading ? (
+                  <tr><td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">
+                    <Loader2 className="mx-auto mb-2 h-6 w-6 animate-spin" /> Loading templates...
+                  </td></tr>
+                ) : templates.length === 0 && (
                   <tr><td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">No templates yet — create one!</td></tr>
                 )}
               </tbody>

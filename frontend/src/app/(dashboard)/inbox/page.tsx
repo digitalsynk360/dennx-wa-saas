@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
-import { ArrowLeft, CheckCheck, Plus, Send, Sparkles, Tag as TagIcon, Trash2, UserCheck, Users, X, Zap } from "lucide-react";
+import { ArrowLeft, CheckCheck, Loader2, Plus, Send, Sparkles, Tag as TagIcon, Trash2, UserCheck, Users, X, Zap } from "lucide-react";
 
 import { Topbar } from "@/components/layout/topbar";
 import { Alert } from "@/components/ui/alert";
@@ -52,6 +52,7 @@ export default function InboxPage() {
   const [total, setTotal] = useState(0);
   const [handling, setHandling] = useState<string | undefined>(undefined);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [convLoading, setConvLoading] = useState(true);
 
   // Messages
   const [messages, setMessages] = useState<MessageResponse[]>([]);
@@ -82,6 +83,7 @@ export default function InboxPage() {
 
   // ─── Load conversations ──────────────────────────────────────────────
   const loadConversations = useCallback(async () => {
+    setConvLoading(true);
     try {
       const params = new URLSearchParams({ page: "1", page_size: "50" });
       if (handling) params.set("handling", handling);
@@ -92,6 +94,8 @@ export default function InboxPage() {
       setTotal(data.total);
     } catch {
       setError("Failed to load conversations");
+    } finally {
+      setConvLoading(false);
     }
   }, [handling]);
 
@@ -369,7 +373,11 @@ export default function InboxPage() {
 
           {/* List */}
           <div className="flex-1 overflow-y-auto">
-            {conversations.length === 0 && (
+            {convLoading ? (
+              <div className="flex flex-col items-center justify-center p-8 text-sm text-muted-foreground">
+                <Loader2 className="mb-2 h-6 w-6 animate-spin" /> Loading conversations...
+              </div>
+            ) : conversations.length === 0 && (
               <p className="p-4 text-sm text-muted-foreground">
                 No conversations yet.
               </p>

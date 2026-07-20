@@ -46,6 +46,7 @@ export default function CampaignsPage() {
     recipients: { id: string; status: string; error_message: string | null; contact_name: string | null; contact_phone: string | null }[];
   } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     api.get<TagResponse[]>("/tags").then(({ data }) => setAllTags(data)).catch(() => {});
@@ -53,6 +54,7 @@ export default function CampaignsPage() {
       const { data } = await api.get<CampaignListResponse>("/campaigns?page_size=50");
       setCampaigns(data.items);
     } catch { setError("Failed to load campaigns"); }
+    finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -201,7 +203,11 @@ export default function CampaignsPage() {
               </tr>
             </thead>
             <tbody>
-              {campaigns.length === 0 && (
+              {loading ? (
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
+                  <Loader2 className="mx-auto mb-2 h-6 w-6 animate-spin" /> Loading campaigns...
+                </td></tr>
+              ) : campaigns.length === 0 && (
                 <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">No campaigns yet.</td></tr>
               )}
               {campaigns.map((c) => (

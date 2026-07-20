@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  CheckCircle2, Download, Pencil, Plus, Search, Tag as TagIcon,
+  CheckCircle2, Download, Loader2, Pencil, Plus, Search, Tag as TagIcon,
   Trash2, Upload, Users, X,
 } from "lucide-react";
 
@@ -24,6 +24,7 @@ export default function ContactsPage() {
   const [filterTag, setFilterTag] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // ── Add contact modal ──
@@ -53,6 +54,7 @@ export default function ContactsPage() {
 
   const load = useCallback(async () => {
     setError(null);
+    setLoading(true);
     const params = new URLSearchParams({ page: String(page), page_size: "30" });
     if (search) params.set("search", search);
     try {
@@ -60,6 +62,7 @@ export default function ContactsPage() {
       setContacts(data.items);
       setTotal(data.total);
     } catch { setError("Failed to load contacts"); }
+    finally { setLoading(false); }
   }, [page, search]);
 
   useEffect(() => { load(); loadTags(); }, [load, loadTags]);
@@ -334,7 +337,12 @@ export default function ContactsPage() {
                     </td>
                   </tr>
                 ))}
-                {shown.length === 0 && (
+                {loading ? (
+                  <tr><td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
+                    <Loader2 className="mx-auto mb-2 h-6 w-6 animate-spin" />
+                    Loading contacts...
+                  </td></tr>
+                ) : shown.length === 0 && (
                   <tr><td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
                     <Users className="mx-auto mb-2 h-8 w-8" />
                     No contacts {filterTag ? "with this tag" : "yet"}
