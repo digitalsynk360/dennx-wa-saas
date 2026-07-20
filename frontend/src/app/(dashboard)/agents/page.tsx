@@ -11,9 +11,10 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { api, getErrorMessage } from "@/lib/api";
 import type { AgentResponse } from "@/types/billing";
+import type { RoleResponse, WorkspaceMemberResponse } from "@/types/workspace";
 
-interface Role { name: string; display_name: string }
-interface Member { id: string; user_id: string; full_name: string; email: string; role: string; is_active: boolean }
+type Role = RoleResponse;
+type Member = WorkspaceMemberResponse;
 
 export default function AgentsPage() {
   const [agents, setAgents] = useState<AgentResponse[]>([]);
@@ -115,13 +116,13 @@ export default function AgentsPage() {
               </thead>
               <tbody className="divide-y divide-border">
                 {members.map((m) => {
-                  const agent = agents.find((a) => a.email === m.email);
+                  const agent = agents.find((a) => a.email === m.user.email);
                   return (
                     <tr key={m.id}>
-                      <td className="px-4 py-3 font-medium">{m.full_name}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{m.email}</td>
+                      <td className="px-4 py-3 font-medium">{m.user.full_name}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{m.user.email}</td>
                       <td className="px-4 py-3">
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-xs capitalize">{m.role}</span>
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-xs capitalize">{m.role.name}</span>
                       </td>
                       <td className="px-4 py-3">
                         <span className={`flex items-center gap-1.5 text-xs ${agent?.is_online ? "text-green-600" : "text-muted-foreground"}`}>
@@ -131,7 +132,7 @@ export default function AgentsPage() {
                       </td>
                       <td className="px-4 py-3">
                         <button
-                          onClick={() => handleRemove(m.id, m.full_name)}
+                          onClick={() => handleRemove(m.id, m.user.full_name)}
                           className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-red-600 hover:bg-red-50"
                         >
                           <UserMinus className="h-3.5 w-3.5" /> Remove
@@ -200,7 +201,7 @@ export default function AgentsPage() {
             <Label>Role</Label>
             <Select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}>
               {roles.map((r) => (
-                <option key={r.name} value={r.name}>{r.display_name || r.name}</option>
+                <option key={r.name} value={r.name}>{r.name}</option>
               ))}
               {roles.length === 0 && (
                 <>
