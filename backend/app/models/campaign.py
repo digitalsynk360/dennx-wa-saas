@@ -57,6 +57,7 @@ class CampaignRecipient(Base, UUIDMixin, TimestampMixin):
     )
     status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
     error_message: Mapped[str | None] = mapped_column(Text)
+    retry_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)  # # of automatic 131049 retries used (max 2)
     variables: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
 
     campaign: Mapped["Campaign"] = relationship(back_populates="recipients")

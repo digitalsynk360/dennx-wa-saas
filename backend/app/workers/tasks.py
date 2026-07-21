@@ -88,6 +88,86 @@ def dispatch_campaign(self, workspace_id: str, campaign_id: str) -> None:
 
 
 @celery_app.task(
+    name="app.workers.tasks.retry_failed_recipient",
+    bind=True,
+    max_retries=2,
+    queue="campaigns",
+)
+def retry_failed_recipient(self, workspace_id: str, campaign_id: str, recipient_id: str) -> None:
+    """Fires ~25h after a 131049 (Meta frequency-cap) failure — see
+    campaign_dispatcher._send_one_recipient. One-shot re-send attempt
+    for that single recipient; if it fails again with 131049 and
+    retries remain, _send_one_recipient schedules another one itself."""
+    from app.core.database import AsyncSessionLocal
+    from app.repositories.campaign_repository import (
+        CampaignRecipientRepository,
+        CampaignRepository,
+    )
+    from app.repositories.template_repository import TemplateRepository
+    from app.repositories.whatsapp_repository import WhatsAppRepository
+    from app.services.campaign_dispatcher import _send_one_recipient
+    from app.services.whatsapp_service import get_decrypted_token
+
+    async def _run():
+        async with AsyncSessionLocal() as db:
+            camp_repo = CampaignRepository(db)
+            campaign = await camp_repo.get_by_id(uuid.UUID(campaign_id))
+            if campaign is None or campaign.status not in ("running", "queued", "paused"):
+                return  # campaign deleted/cancelled since scheduling
+
+            rec_repo = CampaignRecipientRepository(db)
+            recipient = await rec_repo.get_by_id(uuid.UUID(recipient_id))
+            if recipient is None or recipient.status != "retry_scheduled":
+                return  # already resolved another way
+
+            template_repo = TemplateRepository(db)
+            template = await template_repo.get_by_id(campaign.template_id)
+            wa_repo = WhatsAppRepository(db)
+            account = await wa_repo.get_by_workspace(uuid.UUID(workspace_id))
+            token = get_decrypted_token(account)
+
+            await _send_one_recipient(db, campaign, template, account, token, recipient)
+            await db.commit()
+
+    try:
+        _run_async(_run())
+    except Exception as exc:
+        logger.error("retry_failed_recipient_error recipient_id=%s error=%s", recipient_id, str(exc))
+        raise self.retry(exc=exc)
+
+
+@celery_app.task(name="app.workers.tasks.continue_queued_campaigns")
+def continue_queued_campaigns() -> None:
+    """Beat: every few hours, resumes any campaign that hit its daily
+    safe-send cap mid-run (status="queued" — see
+    campaign_dispatcher._run_dispatch). Re-checking often is safe:
+    the dispatcher recomputes the real rolling-24h budget from actual
+    sent messages each time, so it can never over-send even if this
+    fires more often than the budget actually refills."""
+    from app.core.database import AsyncSessionLocal
+    from app.models.campaign import Campaign
+    from sqlalchemy import select
+
+    async def _run():
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(Campaign).where(Campaign.status == "queued"))
+            queued = list(result.scalars())
+            targets = [(c.workspace_id, c.id) for c in queued]
+            for c in queued:
+                c.status = "running"
+            await db.commit()
+
+        from app.services.campaign_dispatcher import _run_dispatch
+        for workspace_id, campaign_id in targets:
+            try:
+                await _run_dispatch(workspace_id, campaign_id)
+            except Exception as e:
+                logger.error("continue_queued_campaign_failed campaign_id=%s error=%s", str(campaign_id), str(e))
+
+    _run_async(_run())
+
+
+@celery_app.task(
     name="app.workers.tasks.crawl_knowledge_base",
     bind=True,
     max_retries=2,

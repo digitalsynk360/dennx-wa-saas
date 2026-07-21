@@ -21,6 +21,7 @@ const STATUS_COLORS: Record<string, string> = {
   draft: "bg-muted text-muted-foreground",
   scheduled: "bg-blue-100 text-blue-700",
   running: "bg-green-100 text-green-700",
+  queued: "bg-indigo-100 text-indigo-700",
   paused: "bg-yellow-100 text-yellow-700",
   completed: "bg-green-100 text-green-700",
   failed: "bg-red-100 text-red-700",
@@ -251,9 +252,9 @@ export default function CampaignsPage() {
                         <Pause className="h-3.5 w-3.5" /> Pause
                       </Button>
                     )}
-                    {c.status === "paused" && (
+                    {(c.status === "paused" || c.status === "queued") && (
                       <Button size="sm" variant="outline" onClick={() => handleAction(c.id, "launch")}>
-                        <Play className="h-3.5 w-3.5" /> Resume
+                        <Play className="h-3.5 w-3.5" /> {c.status === "queued" ? "Resume Now" : "Resume"}
                       </Button>
                     )}
                   </td>
@@ -321,6 +322,7 @@ export default function CampaignsPage() {
                             : r.status === "sent" ? "bg-blue-100 text-blue-700"
                             : r.status === "failed" ? "bg-red-100 text-red-700"
                             : r.status === "skipped" ? "bg-gray-100 text-gray-600"
+                            : r.status === "retry_scheduled" ? "bg-indigo-100 text-indigo-700"
                             : "bg-amber-100 text-amber-700"
                           )}>
                             {r.status}

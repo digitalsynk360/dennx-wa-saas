@@ -18,11 +18,11 @@ Recipient lifecycle: pending -> sent -> delivered -> read | failed
 """
 import asyncio
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -38,10 +38,40 @@ from app.repositories.campaign_repository import (
 from app.repositories.template_repository import TemplateRepository
 from app.repositories.whatsapp_repository import WhatsAppRepository
 from app.schemas.campaign import CreateCampaignRequest
+from app.services import whatsapp_service
 from app.services.whatsapp_service import get_decrypted_token
 from app.websocket.manager import manager
 
 logger = get_logger(__name__)
+
+
+class WhatsAppSendError(Exception):
+    """Carries Meta's parsed error code so callers can react
+    differently per failure type (e.g. 131049 = retry later,
+    132012 = permanent template mismatch, no point retrying)."""
+    def __init__(self, code: int | None, message: str, raw: str):
+        self.code = code
+        self.message = message
+        self.raw = raw
+        super().__init__(message)
+
+
+async def _sent_in_last_24h(db: AsyncSession, workspace_id: uuid.UUID) -> int:
+    """Real rolling 24h outbound-message count for this workspace's
+    WhatsApp account — used instead of a fixed per-invocation cap so
+    the budget stays correct no matter how many times a day the
+    Celery Beat continuation task fires."""
+    from app.models.messaging import Message
+
+    since = datetime.now(timezone.utc) - timedelta(hours=24)
+    result = await db.execute(
+        select(func.count(Message.id)).where(
+            Message.workspace_id == workspace_id,
+            Message.direction == "outbound",
+            Message.created_at >= since,
+        )
+    )
+    return result.scalar() or 0
 
 
 async def _resolve_contact_ids(
@@ -113,18 +143,21 @@ async def create_campaign(
 
 
 async def launch_campaign(db: AsyncSession, workspace_id: uuid.UUID, campaign_id: uuid.UUID) -> Campaign:
-    """Starts sending immediately (draft -> running). Scheduled
-    campaigns are launched by the Celery beat job in production;
-    here it's triggered manually via the 'Send Now' button."""
+    """Starts sending immediately (draft -> running), or resumes a
+    campaign that auto-paused (failure-rate guardrail) or auto-queued
+    (hit its daily safe-send cap) — both need the same "Resume" action
+    from the user, no separate endpoint."""
     repo = CampaignRepository(db)
     campaign = await repo.get_with_recipients(campaign_id, workspace_id)
     if campaign is None:
         raise HTTPException(status_code=404, detail="Campaign not found.")
-    if campaign.status not in ("draft", "scheduled"):
+    if campaign.status not in ("draft", "scheduled", "paused", "queued"):
         raise HTTPException(status_code=400, detail=f"Cannot launch a campaign in status '{campaign.status}'.")
 
     campaign.status = "running"
-    campaign.started_at = datetime.now(timezone.utc)
+    campaign.pause_reason = None
+    if campaign.started_at is None:
+        campaign.started_at = datetime.now(timezone.utc)
     await db.flush()
 
     # Prefer Celery — dispatch runs in a separate worker process, so
@@ -186,7 +219,20 @@ async def get_campaign_detail(db: AsyncSession, workspace_id: uuid.UUID, campaig
 
 async def _run_dispatch(workspace_id: uuid.UUID, campaign_id: uuid.UUID) -> None:
     """Sends to every pending recipient with Cloud-API-friendly pacing
-    (CAMPAIGN_SEND_RATE_PER_SECOND).
+    (CAMPAIGN_SEND_RATE_PER_SECOND), plus three account-safety
+    guardrails Meta's 2026 guidelines call for:
+
+      1. Daily volume cap — stays under 80% of the account's real
+         messaging-tier ceiling (measured via actual rolling-24h sent
+         count, not a per-invocation guess, so it stays correct no
+         matter how often the continuation task re-triggers this).
+         If the budget runs out mid-campaign, remaining recipients are
+         queued and finish automatically once budget frees up.
+      2. Failure-spike auto-pause — if the failure rate crosses 30%
+         after a reasonable sample size, the campaign pauses itself
+         rather than continuing to hammer a cooling quality rating.
+      3. 131049-aware — see _send_one_recipient; frequency-capped
+         sends get rescheduled instead of counted as hard failures.
 
     IMPORTANT: unlike a naive implementation, this does NOT hold one
     DB connection for the campaign's entire run (which can be hours
@@ -209,12 +255,59 @@ async def _run_dispatch(workspace_id: uuid.UUID, campaign_id: uuid.UUID) -> None
         template = await template_repo.get_by_id(campaign.template_id)
         wa_repo = WhatsAppRepository(db)
         account = await wa_repo.get_by_workspace(workspace_id)
+        await whatsapp_service.refresh_account_health(db, account)
         token = get_decrypted_token(account)
         recipient_repo = CampaignRecipientRepository(db)
         pending_ids = [r.id for r in await recipient_repo.list_pending(campaign_id)]
 
+        already_sent_24h = await _sent_in_last_24h(db, workspace_id)
+        tier_limit = whatsapp_service.TIER_LIMITS.get(
+            account.messaging_limit_tier or "", whatsapp_service.DEFAULT_TIER_LIMIT
+        )
+        safe_limit = int(tier_limit * 0.8)
+        budget = max(safe_limit - already_sent_24h, 0)
+        await db.commit()
+
+    if budget <= 0:
+        async with AsyncSessionLocal() as db:
+            repo = CampaignRepository(db)
+            campaign = await repo.get_by_id(campaign_id)
+            if campaign is not None:
+                campaign.status = "queued"
+                campaign.pause_reason = (
+                    f"Daily safe-send limit already used ({already_sent_24h}/{safe_limit} in the last 24h) "
+                    "across your WhatsApp account — this campaign will continue automatically once budget frees up."
+                )
+                await db.commit()
+            await manager.broadcast(
+                str(workspace_id), "campaign_update",
+                {"campaign_id": str(campaign_id), "status": "queued"},
+            )
+        return
+
+    processed = 0
+    sent_this_run = 0
+    failed_this_run = 0
+
     try:
         for recipient_id in pending_ids:
+            if sent_this_run >= budget:
+                async with AsyncSessionLocal() as db:
+                    repo = CampaignRepository(db)
+                    campaign = await repo.get_by_id(campaign_id)
+                    if campaign is not None and campaign.status == "running":
+                        campaign.status = "queued"
+                        campaign.pause_reason = (
+                            f"Daily safe-send limit reached ({sent_this_run}/{budget} this cycle) — "
+                            "remaining recipients will continue automatically within 24h to protect your Quality Rating."
+                        )
+                        await db.commit()
+                    await manager.broadcast(
+                        str(workspace_id), "campaign_update",
+                        {"campaign_id": str(campaign_id), "status": "queued"},
+                    )
+                return
+
             # Fresh, short-lived connection per recipient — held only
             # for the few ms it takes to send + write the result, then
             # released back to the pool immediately.
@@ -230,6 +323,30 @@ async def _run_dispatch(workspace_id: uuid.UUID, campaign_id: uuid.UUID) -> None
                     continue
 
                 await _send_one_recipient(db, campaign, template, account, token, recipient)
+                if recipient.status == "sent":
+                    sent_this_run += 1
+                if recipient.status == "failed":
+                    failed_this_run += 1
+                processed += 1
+
+                # Auto-pause guardrail: once there's a meaningful
+                # sample, a runaway failure rate means something is
+                # wrong (bad list, quality drop, wrong template) —
+                # stop before it does more damage to the account's
+                # standing rather than burning through the whole list.
+                if processed >= 20 and (failed_this_run / processed) > 0.30:
+                    campaign.status = "paused"
+                    campaign.pause_reason = (
+                        f"Auto-paused: failure rate hit {failed_this_run}/{processed} "
+                        "({:.0f}%) — check Quality Rating and audience opt-in before resuming."
+                    ).format(failed_this_run / processed * 100)
+                    await db.commit()
+                    await manager.broadcast(
+                        str(workspace_id), "campaign_update",
+                        {"campaign_id": str(campaign_id), "status": "paused"},
+                    )
+                    return
+
                 await db.commit()
 
             await asyncio.sleep(delay)
@@ -325,6 +442,39 @@ async def _send_one_recipient(
         except Exception as e:
             logger.error("campaign_message_mirror_failed", error=str(e))
         campaign.sent_count += 1
+
+    except WhatsAppSendError as e:
+        # Error 131049 = Meta's per-user marketing frequency cap — this
+        # is NOT a permanent failure or an account problem. Meta's own
+        # guidance is to wait 24h+ before retrying, since the cap can
+        # clear at any point after that. Auto-reschedule instead of
+        # giving up, capped at 2 attempts so a genuinely unreachable
+        # contact doesn't retry forever.
+        if e.code == 131049 and recipient.retry_count < 2:
+            recipient.retry_count += 1
+            recipient.status = "retry_scheduled"
+            recipient.error_message = (
+                f"Meta frequency cap (131049) — auto-retry #{recipient.retry_count}/2 scheduled in ~25h"
+            )[:500]
+            try:
+                from app.workers.tasks import retry_failed_recipient
+                retry_failed_recipient.apply_async(
+                    args=[str(campaign.workspace_id), str(campaign.id), str(recipient.id)],
+                    countdown=90000,  # ~25h — comfortably past Meta's minimum 24h guidance
+                    queue="campaigns",
+                )
+            except Exception as sched_err:
+                logger.error("retry_schedule_failed", error=str(sched_err))
+                # Celery unreachable — fall back to a normal failure
+                # rather than silently losing the recipient.
+                recipient.status = "failed"
+                campaign.failed_count += 1
+        else:
+            recipient.status = "failed"
+            recipient.error_message = f"[{e.code}] {e.message}"[:500]
+            campaign.failed_count += 1
+            logger.error("campaign_send_failed", contact_id=str(contact.id), code=e.code, error=e.message)
+
     except Exception as e:
         recipient.status = "failed"
         recipient.error_message = str(e)[:500]
@@ -441,7 +591,15 @@ async def _send_whatsapp_template(
         response = await client.post(url, json=payload, headers={"Authorization": f"Bearer {token}"})
 
     if response.status_code != 200:
-        raise RuntimeError(f"WhatsApp API error: {response.text}")
+        code = None
+        message = response.text
+        try:
+            err = response.json().get("error", {})
+            code = err.get("code")
+            message = err.get("message") or message
+        except Exception:
+            pass
+        raise WhatsAppSendError(code, message, response.text)
 
     data = response.json()
     return data.get("messages", [{}])[0].get("id", "")

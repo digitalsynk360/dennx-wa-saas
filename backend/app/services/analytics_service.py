@@ -371,7 +371,7 @@ async def _get_meta_insights(db: AsyncSession, workspace_id: uuid.UUID, days: in
             if account.phone_number_id:
                 phone_resp = await client.get(
                     f"{settings.graph_api_base}/{account.phone_number_id}",
-                    params={"fields": "display_phone_number,verified_name,quality_rating,code_verification_status,name_status,platform_type"},
+                    params={"fields": "display_phone_number,verified_name,quality_rating,code_verification_status,name_status,platform_type,messaging_limit_tier"},
                     headers=headers,
                 )
 
@@ -385,13 +385,28 @@ async def _get_meta_insights(db: AsyncSession, workspace_id: uuid.UUID, days: in
 
         phone_health = None
         if phone_resp is not None and phone_resp.status_code == 200:
+            from app.services.whatsapp_service import DEFAULT_TIER_LIMIT, TIER_LIMITS
+
             pd = phone_resp.json()
+            tier = pd.get("messaging_limit_tier")
+            # Keep the DB copy fresh too, so campaign pre-flight checks
+            # (which read from the DB, not a live call) stay accurate.
+            if pd.get("quality_rating"):
+                account.quality_rating = pd["quality_rating"]
+            if tier:
+                account.messaging_limit_tier = tier
+            await db.flush()
+
+            tier_limit = TIER_LIMITS.get(tier or "", DEFAULT_TIER_LIMIT)
             phone_health = {
                 "display_phone_number": pd.get("display_phone_number"),
                 "verified_name": pd.get("verified_name"),
                 "quality_rating": pd.get("quality_rating"),   # GREEN | YELLOW | RED | UNKNOWN
                 "name_status": pd.get("name_status"),
                 "code_verification_status": pd.get("code_verification_status"),
+                "messaging_limit_tier": tier,
+                "tier_limit_24h": tier_limit,
+                "safe_daily_volume": int(tier_limit * 0.8),
             }
 
         return {

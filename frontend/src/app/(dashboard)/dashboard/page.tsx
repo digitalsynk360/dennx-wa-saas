@@ -37,6 +37,9 @@ interface DashboardData {
       quality_rating: string | null;
       name_status: string | null;
       code_verification_status: string | null;
+      messaging_limit_tier: string | null;
+      tier_limit_24h: number;
+      safe_daily_volume: number;
     } | null;
   } | null;
 }
@@ -280,6 +283,22 @@ export default function DashboardPage() {
               {data.meta_insights.phone_health.name_status && (
                 <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600 capitalize">
                   Name: {data.meta_insights.phone_health.name_status.toLowerCase().replace(/_/g, " ")}
+                </span>
+              )}
+              {data.meta_insights.phone_health.messaging_limit_tier && (
+                <span
+                  className="rounded-full bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-600"
+                  title="Meta's per-24h unique-contact messaging tier for this number"
+                >
+                  {data.meta_insights.phone_health.messaging_limit_tier.replace("TIER_", "").replace("K", ",000")}/24h tier
+                </span>
+              )}
+              {data.meta_insights.phone_health.safe_daily_volume > 0 && (
+                <span
+                  className="rounded-full bg-teal-50 px-2.5 py-1 text-xs font-medium text-teal-600"
+                  title="80% of your tier ceiling — the volume campaigns auto-pace themselves under to protect your Quality Rating"
+                >
+                  Safe daily volume: {data.meta_insights.phone_health.safe_daily_volume.toLocaleString()}
                 </span>
               )}
             </div>

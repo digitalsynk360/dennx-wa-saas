@@ -79,3 +79,57 @@ def get_decrypted_token(account: WhatsAppAccount) -> str:
             detail="WhatsApp account has no access token.",
         )
     return decrypt_value(account.access_token_encrypted)
+
+
+# Meta's documented per-24h unique-recipient caps by messaging tier
+# (2026 rollout: verified accounts can jump straight to 100K; TIER_250
+# stays the unverified-account floor). Used to compute a safe daily
+# send volume so large campaigns pace themselves instead of blasting
+# past the account's real capacity and tanking the quality rating.
+TIER_LIMITS = {
+    "TIER_250": 250,
+    "TIER_1K": 1_000,
+    "TIER_10K": 10_000,
+    "TIER_100K": 100_000,
+    "TIER_UNLIMITED": 1_000_000,
+}
+DEFAULT_TIER_LIMIT = 250  # conservative floor when tier is unknown/unsynced
+
+
+async def refresh_account_health(db: AsyncSession, account: WhatsAppAccount) -> WhatsAppAccount:
+    """Pulls live quality_rating + messaging_limit_tier from Meta and
+    persists them on the account row, so campaign pre-flight checks
+    and the dashboard don't need a fresh API call every time. Never
+    raises — on any failure the existing (possibly stale) DB values
+    are left untouched and used as-is."""
+    import httpx
+
+    if not account.phone_number_id:
+        return account
+    try:
+        token = get_decrypted_token(account)
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(
+                f"{settings.graph_api_base}/{account.phone_number_id}",
+                params={"fields": "quality_rating,messaging_limit_tier"},
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        if r.status_code == 200:
+            data = r.json()
+            if data.get("quality_rating"):
+                account.quality_rating = data["quality_rating"]
+            if data.get("messaging_limit_tier"):
+                account.messaging_limit_tier = data["messaging_limit_tier"]
+            await db.flush()
+    except Exception:
+        pass
+    return account
+
+
+def daily_send_cap(account: WhatsAppAccount) -> int:
+    """Safe number of NEW sends to make in a ~24h window — 80% of the
+    account's tier ceiling, so normal reply/service traffic and any
+    margin for error always has headroom and the account never rides
+    right at the edge of its limit."""
+    limit = TIER_LIMITS.get(account.messaging_limit_tier or "", DEFAULT_TIER_LIMIT)
+    return max(int(limit * 0.8), 50)

@@ -47,6 +47,8 @@ celery_app.conf.update(
         "app.workers.tasks.process_webhook_event": {"queue": "webhooks"},
         "app.workers.tasks.dispatch_campaign": {"queue": "campaigns"},
         "app.workers.tasks.send_campaign_message": {"queue": "campaigns"},
+        "app.workers.tasks.retry_failed_recipient": {"queue": "campaigns"},
+        "app.workers.tasks.continue_queued_campaigns": {"queue": "campaigns"},
         "app.workers.tasks.run_ai_task": {"queue": "ai"},
     },
     beat_schedule={
@@ -57,6 +59,11 @@ celery_app.conf.update(
         "expire-stale-sessions": {
             "task": "app.workers.tasks.expire_stale_conversations",
             "schedule": 600.0,
+        },
+        "continue-queued-campaigns": {
+            "task": "app.workers.tasks.continue_queued_campaigns",
+            "schedule": 10800.0,  # every 3h — safe to run often since the
+            # dispatcher recomputes the real rolling-24h budget each time
         },
     },
     **({"broker_use_ssl": _redis_ssl_opts, "redis_backend_use_ssl": _redis_ssl_opts} if _uses_ssl else {}),
