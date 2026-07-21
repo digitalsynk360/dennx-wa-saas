@@ -19,6 +19,7 @@ class ContactRepository(BaseRepository[Contact]):
         status: str | None = None,
         page: int = 1,
         page_size: int = 30,
+        tag_id: uuid.UUID | None = None,
     ) -> tuple[list[Contact], int]:
         stmt = (
             select(Contact)
@@ -35,6 +36,8 @@ class ContactRepository(BaseRepository[Contact]):
             )
         if status:
             stmt = stmt.where(Contact.status == status)
+        if tag_id:
+            stmt = stmt.where(Contact.tags.any(Tag.id == tag_id))
 
         count = (await self.db.execute(
             select(func.count()).select_from(stmt.subquery())

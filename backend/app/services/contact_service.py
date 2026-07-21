@@ -24,11 +24,12 @@ async def list_contacts(
     status_filter: str | None,
     page: int,
     page_size: int,
+    tag_id: uuid.UUID | None = None,
 ):
     repo = ContactRepository(db)
     return await repo.list_by_workspace(
         workspace_id, search=search, status=status_filter,
-        page=page, page_size=page_size,
+        page=page, page_size=page_size, tag_id=tag_id,
     )
 
 

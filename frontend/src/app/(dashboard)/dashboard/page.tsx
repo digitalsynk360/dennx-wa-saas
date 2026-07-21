@@ -285,20 +285,20 @@ export default function DashboardPage() {
                   Name: {data.meta_insights.phone_health.name_status.toLowerCase().replace(/_/g, " ")}
                 </span>
               )}
-              {data.meta_insights.phone_health.messaging_limit_tier && (
+              {data.meta_insights.phone_health.tier_limit_24h > 0 && (
                 <span
-                  className="rounded-full bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-600"
-                  title="Meta's per-24h unique-contact messaging tier for this number"
+                  className="rounded-full bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-700"
+                  title="Same number shown as 'Current' in Meta's WhatsApp Manager > Messaging Limits"
                 >
-                  {data.meta_insights.phone_health.messaging_limit_tier.replace("TIER_", "").replace("K", ",000")}/24h tier
+                  Current Limit: {data.meta_insights.phone_health.tier_limit_24h.toLocaleString()}/24h
                 </span>
               )}
               {data.meta_insights.phone_health.safe_daily_volume > 0 && (
                 <span
                   className="rounded-full bg-teal-50 px-2.5 py-1 text-xs font-medium text-teal-600"
-                  title="80% of your tier ceiling — the volume campaigns auto-pace themselves under to protect your Quality Rating"
+                  title="80% of your current limit — the volume campaigns auto-pace themselves under to protect your Quality Rating and leave headroom for replies"
                 >
-                  Safe daily volume: {data.meta_insights.phone_health.safe_daily_volume.toLocaleString()}
+                  Recommended safe volume: {data.meta_insights.phone_health.safe_daily_volume.toLocaleString()}
                 </span>
               )}
             </div>

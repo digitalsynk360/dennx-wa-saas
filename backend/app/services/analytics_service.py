@@ -366,12 +366,15 @@ async def _get_meta_insights(db: AsyncSession, workspace_id: uuid.UUID, days: in
                 params={"fields": f"analytics.start({start_ts}).end({now_ts}).granularity(DAY)"},
                 headers=headers,
             )
-            # Phone number health — quality rating, verified name, status
+            # Phone number health — quality rating, verified name, status.
+            # NOTE: messaging_limit_tier was deprecated by Meta (May 2026);
+            # whatsapp_business_manager_messaging_limit replaces it with
+            # the same TIER_xxx string values.
             phone_resp = None
             if account.phone_number_id:
                 phone_resp = await client.get(
                     f"{settings.graph_api_base}/{account.phone_number_id}",
-                    params={"fields": "display_phone_number,verified_name,quality_rating,code_verification_status,name_status,platform_type,messaging_limit_tier"},
+                    params={"fields": "display_phone_number,verified_name,quality_rating,code_verification_status,name_status,platform_type,whatsapp_business_manager_messaging_limit"},
                     headers=headers,
                 )
 
@@ -388,7 +391,7 @@ async def _get_meta_insights(db: AsyncSession, workspace_id: uuid.UUID, days: in
             from app.services.whatsapp_service import DEFAULT_TIER_LIMIT, TIER_LIMITS
 
             pd = phone_resp.json()
-            tier = pd.get("messaging_limit_tier")
+            tier = pd.get("whatsapp_business_manager_messaging_limit")
             # Keep the DB copy fresh too, so campaign pre-flight checks
             # (which read from the DB, not a live call) stay accurate.
             if pd.get("quality_rating"):
@@ -397,7 +400,8 @@ async def _get_meta_insights(db: AsyncSession, workspace_id: uuid.UUID, days: in
                 account.messaging_limit_tier = tier
             await db.flush()
 
-            tier_limit = TIER_LIMITS.get(tier or "", DEFAULT_TIER_LIMIT)
+            from app.services.whatsapp_service import _tier_limit_from_code
+            tier_limit = TIER_LIMITS.get(tier or "") or _tier_limit_from_code(tier or "") or DEFAULT_TIER_LIMIT
             phone_health = {
                 "display_phone_number": pd.get("display_phone_number"),
                 "verified_name": pd.get("verified_name"),

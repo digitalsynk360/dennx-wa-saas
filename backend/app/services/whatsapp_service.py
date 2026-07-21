@@ -89,6 +89,7 @@ def get_decrypted_token(account: WhatsAppAccount) -> str:
 TIER_LIMITS = {
     "TIER_250": 250,
     "TIER_1K": 1_000,
+    "TIER_2K": 2_000,
     "TIER_10K": 10_000,
     "TIER_100K": 100_000,
     "TIER_UNLIMITED": 1_000_000,
@@ -96,12 +97,41 @@ TIER_LIMITS = {
 DEFAULT_TIER_LIMIT = 250  # conservative floor when tier is unknown/unsynced
 
 
+def _tier_limit_from_code(tier: str) -> int | None:
+    """Parses the numeric ceiling straight out of Meta's TIER_xxx
+    code (e.g. "TIER_2K" -> 2000, "TIER_250" -> 250, "TIER_100K" ->
+    100000) as a fallback when the exact code isn't in TIER_LIMITS.
+    Meta's tier ladder has changed shape more than once (250→1K→10K→
+    100K in some docs, 250→2K→10K→100K in the live UI) and different
+    accounts/regions can see different rungs — parsing the code
+    directly means a rung we haven't hardcoded yet still resolves
+    correctly instead of silently falling back to the ultra-
+    conservative 250 default."""
+    import re
+
+    if tier.upper() == "TIER_UNLIMITED":
+        return 1_000_000
+    m = re.match(r"TIER_(\d+)(K|M)?$", tier.upper())
+    if not m:
+        return None
+    n = int(m.group(1))
+    if m.group(2) == "K":
+        n *= 1_000
+    elif m.group(2) == "M":
+        n *= 1_000_000
+    return n
+
+
 async def refresh_account_health(db: AsyncSession, account: WhatsAppAccount) -> WhatsAppAccount:
-    """Pulls live quality_rating + messaging_limit_tier from Meta and
+    """Pulls live quality_rating + messaging limit from Meta and
     persists them on the account row, so campaign pre-flight checks
     and the dashboard don't need a fresh API call every time. Never
     raises — on any failure the existing (possibly stale) DB values
-    are left untouched and used as-is."""
+    are left untouched and used as-is.
+
+    NOTE: Meta deprecated the `messaging_limit_tier` field (May 2026)
+    in favor of `whatsapp_business_manager_messaging_limit` — same
+    TIER_xxx string values, different field name to request."""
     import httpx
 
     if not account.phone_number_id:
@@ -111,15 +141,16 @@ async def refresh_account_health(db: AsyncSession, account: WhatsAppAccount) -> 
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(
                 f"{settings.graph_api_base}/{account.phone_number_id}",
-                params={"fields": "quality_rating,messaging_limit_tier"},
+                params={"fields": "quality_rating,whatsapp_business_manager_messaging_limit"},
                 headers={"Authorization": f"Bearer {token}"},
             )
         if r.status_code == 200:
             data = r.json()
             if data.get("quality_rating"):
                 account.quality_rating = data["quality_rating"]
-            if data.get("messaging_limit_tier"):
-                account.messaging_limit_tier = data["messaging_limit_tier"]
+            tier = data.get("whatsapp_business_manager_messaging_limit")
+            if tier:
+                account.messaging_limit_tier = tier
             await db.flush()
     except Exception:
         pass
@@ -131,5 +162,6 @@ def daily_send_cap(account: WhatsAppAccount) -> int:
     account's tier ceiling, so normal reply/service traffic and any
     margin for error always has headroom and the account never rides
     right at the edge of its limit."""
-    limit = TIER_LIMITS.get(account.messaging_limit_tier or "", DEFAULT_TIER_LIMIT)
+    tier = account.messaging_limit_tier or ""
+    limit = TIER_LIMITS.get(tier) or _tier_limit_from_code(tier) or DEFAULT_TIER_LIMIT
     return max(int(limit * 0.8), 50)

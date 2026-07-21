@@ -41,13 +41,14 @@ tags_router = APIRouter(tags=["tags"])
 async def list_contacts(
     search: str | None = Query(None),
     status: str | None = Query(None),
+    tag_id: uuid.UUID | None = Query(None, description="Filter to contacts having this tag — used by campaign 'select by group', which needs the FULL group, not just one page"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(30, ge=1, le=100),
+    page_size: int = Query(30, ge=1, le=5000),
     ctx: WorkspaceContext = Depends(require_permission("contacts.read")),
     db: AsyncSession = Depends(get_db),
 ):
     items, total = await contact_service.list_contacts(
-        db, ctx.workspace.id, search, status, page, page_size
+        db, ctx.workspace.id, search, status, page, page_size, tag_id=tag_id
     )
     return ContactListResponse(
         items=[ContactResponse.model_validate(c) for c in items],

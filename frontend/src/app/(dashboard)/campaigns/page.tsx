@@ -31,6 +31,9 @@ export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<CampaignResponse[]>([]);
   const [templates, setTemplates] = useState<TemplateResponse[]>([]);
   const [contacts, setContacts] = useState<ContactResponse[]>([]);
+  const [tagCounts, setTagCounts] = useState<Record<string, number>>({});
+  const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
+  const [groupSelecting, setGroupSelecting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -106,11 +109,56 @@ export default function CampaignsPage() {
     try {
       const [tplRes, contactRes] = await Promise.all([
         api.get<TemplateListResponse>("/templates"),
-        api.get<ContactListResponse>("/contacts?page_size=100"),
+        // For manually browsing/searching individual contacts — this
+        // stays a reasonable page size since it's just for typing a
+        // name to find one person, not for "select whole group".
+        api.get<ContactListResponse>("/contacts?page_size=500"),
       ]);
       setTemplates(tplRes.data.items.filter((t) => t.status === "approved"));
       setContacts(contactRes.data.items);
+
+      // Real per-group counts — NOT derived from the (possibly
+      // incomplete) list above. A group with 803 contacts must show
+      // "803", not however many of them happened to land in the
+      // first 500 fetched overall.
+      if (allTags.length > 0) {
+        const counts: Record<string, number> = {};
+        await Promise.all(
+          allTags.map(async (t) => {
+            try {
+              const { data } = await api.get<ContactListResponse>(`/contacts?tag_id=${t.id}&page_size=1`);
+              counts[t.id] = data.total;
+            } catch { /* leave uncounted tag out of the strip */ }
+          })
+        );
+        setTagCounts(counts);
+      }
     } catch { setError("Failed to load templates/contacts"); }
+  };
+
+  const selectWholeGroup = async (tagId: string, currentlyAllSelected: boolean) => {
+    setGroupSelecting(tagId);
+    try {
+      // Fetch the COMPLETE group straight from the backend — never
+      // rely on whatever happens to be in the locally-loaded
+      // `contacts` array, since that's capped for browsing/search
+      // and would silently under-select large groups.
+      const { data } = await api.get<ContactListResponse>(`/contacts?tag_id=${tagId}&page_size=5000`);
+      setSelectedContacts((prev) => {
+        const next = new Set(prev);
+        data.items.forEach((c) => (currentlyAllSelected ? next.delete(c.id) : next.add(c.id)));
+        return next;
+      });
+      setSelectedGroups((prev) => {
+        const next = new Set(prev);
+        if (currentlyAllSelected) next.delete(tagId); else next.add(tagId);
+        return next;
+      });
+    } catch {
+      setError("Group select failed — try again");
+    } finally {
+      setGroupSelecting(null);
+    }
   };
 
   const toggleContact = (id: string) => {
@@ -384,26 +432,22 @@ export default function CampaignsPage() {
                 <p className="text-xs text-muted-foreground">Group se select karo (click = us group ke sab contacts select):</p>
                 <div className="flex max-h-20 flex-wrap gap-1.5 overflow-y-auto">
                   {allTags.map((t) => {
-                    const groupContacts = contacts.filter((c) => c.tags?.some((ct) => ct.id === t.id));
-                    if (groupContacts.length === 0) return null;
-                    const allIn = groupContacts.every((c) => selectedContacts.has(c.id));
+                    const count = tagCounts[t.id] ?? 0;
+                    if (count === 0) return null;
+                    const isSelecting = groupSelecting === t.id;
+                    const isSelected = selectedGroups.has(t.id);
                     return (
                       <button
                         key={t.id}
                         type="button"
-                        onClick={() => {
-                          setSelectedContacts((prev) => {
-                            const next = new Set(prev);
-                            groupContacts.forEach((c) => (allIn ? next.delete(c.id) : next.add(c.id)));
-                            return next;
-                          });
-                        }}
+                        disabled={isSelecting}
+                        onClick={() => selectWholeGroup(t.id, isSelected)}
                         className={cn(
-                          "rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
-                          allIn ? "bg-primary text-white" : "border border-border bg-white text-muted-foreground hover:border-primary hover:text-primary"
+                          "rounded-full px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60",
+                          isSelected ? "bg-primary text-white" : "border border-border bg-white text-muted-foreground hover:border-primary hover:text-primary"
                         )}
                       >
-                        {allIn && "✓ "}{t.name} ({groupContacts.length})
+                        {isSelecting ? <Loader2 className="inline h-3 w-3 animate-spin" /> : (isSelected ? "✓ " : "")}{t.name} ({count})
                       </button>
                     );
                   })}
