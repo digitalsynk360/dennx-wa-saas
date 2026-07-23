@@ -18,6 +18,26 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: limbu_redis
+    restart: unless-stopped
+    # Self-hosted, local-network only — no per-request billing, no
+    # quota to run out of. Celery alone issues a very high volume of
+    # Redis commands (broker polling, unacked-message visibility
+    # scans, task publish/ack) that quickly exhausts a metered plan
+    # like Upstash's free tier ("max requests limit exceeded").
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - limbu_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: ./backend
@@ -30,6 +50,8 @@ services:
       - 1.1.1.1
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - limbu_net
@@ -62,6 +84,8 @@ services:
         condition: service_healthy
       backend:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - limbu_net
     volumes:
@@ -84,6 +108,8 @@ services:
       postgres:
         condition: service_healthy
       backend:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - limbu_net
@@ -130,6 +156,7 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
   backend_logs:
   certbot_www:
   certbot_certs:
