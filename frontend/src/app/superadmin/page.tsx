@@ -19,7 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { api, getErrorMessage } from "@/lib/api";
-import { clearTokens, setTokens } from "@/lib/auth-storage";
+import { clearTokens, getAccessToken, getRefreshToken, setTokens, startImpersonation } from "@/lib/auth-storage";
 import { cn } from "@/lib/utils";
 import type { MeResponse } from "@/types/auth";
 
@@ -118,10 +118,19 @@ export default function SuperAdminPanel() {
   };
 
   const loginAsUser = async (userId: string, userEmail: string) => {
-    if (!confirm(`${userEmail} ke roop mein login karoge? Tumhara superadmin session yahan se replace ho jaayega — dobara superadmin panel access karne ke liye phir se login karna padega.`)) return;
+    if (!confirm(`${userEmail} ke roop mein login karoge? Dashboard pe ek "Return to Admin" button milega wapas aane ke liye.`)) return;
     setImpersonating(userId);
     try {
       const { data } = await api.post<{ access_token: string; refresh_token: string }>(`/admin/users/${userId}/impersonate`);
+      // Stash the superadmin's own tokens so the dashboard's "Return
+      // to Admin" banner can restore them — without this, switching
+      // to the target user's session is a one-way trip that requires
+      // a full logout + password login to get back.
+      const adminAccess = getAccessToken();
+      const adminRefresh = getRefreshToken();
+      if (adminAccess && adminRefresh) {
+        startImpersonation(adminAccess, adminRefresh);
+      }
       setTokens(data.access_token, data.refresh_token);
       window.location.href = "/dashboard";
     } catch (e: unknown) {

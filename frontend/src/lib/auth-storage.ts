@@ -49,3 +49,32 @@ export function clearActiveWorkspaceId(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(ACTIVE_WORKSPACE_KEY);
 }
+
+// ─── Superadmin impersonation ──────────────────────────────────────
+// When a superadmin clicks "Login as", their own tokens are stashed
+// here (sessionStorage — cleared when the tab closes, unlike the
+// impersonated session's localStorage tokens) so a visible "Return
+// to Admin" banner can restore them without a full logout/login.
+const IMPERSONATION_ADMIN_TOKEN_KEY = "deenx_impersonation_admin_access";
+const IMPERSONATION_ADMIN_REFRESH_KEY = "deenx_impersonation_admin_refresh";
+
+export function startImpersonation(adminAccessToken: string, adminRefreshToken: string): void {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem(IMPERSONATION_ADMIN_TOKEN_KEY, adminAccessToken);
+  sessionStorage.setItem(IMPERSONATION_ADMIN_REFRESH_KEY, adminRefreshToken);
+}
+
+export function isImpersonating(): boolean {
+  if (typeof window === "undefined") return false;
+  return Boolean(sessionStorage.getItem(IMPERSONATION_ADMIN_TOKEN_KEY));
+}
+
+export function endImpersonation(): { access: string; refresh: string } | null {
+  if (typeof window === "undefined") return null;
+  const access = sessionStorage.getItem(IMPERSONATION_ADMIN_TOKEN_KEY);
+  const refresh = sessionStorage.getItem(IMPERSONATION_ADMIN_REFRESH_KEY);
+  sessionStorage.removeItem(IMPERSONATION_ADMIN_TOKEN_KEY);
+  sessionStorage.removeItem(IMPERSONATION_ADMIN_REFRESH_KEY);
+  if (!access || !refresh) return null;
+  return { access, refresh };
+}
