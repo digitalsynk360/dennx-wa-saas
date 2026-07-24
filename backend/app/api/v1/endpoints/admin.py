@@ -2,25 +2,33 @@
 Super Admin (platform-level) endpoints. Mounted at /api/v1/admin.
 Every route requires User.is_superuser = true.
 
-  GET   /admin/overview            platform-wide stats
-  GET   /admin/workspaces          all workspaces + usage
-  PATCH /admin/workspaces/{id}     change plan / activate-deactivate
-  GET   /admin/users               all users
-  PATCH /admin/users/{id}          block / unblock / grant superuser
+  GET   /admin/overview               platform-wide stats
+  GET   /admin/workspaces             all workspaces + usage
+  PATCH /admin/workspaces/{id}        change plan / activate-deactivate
+  GET   /admin/users                  all users
+  GET   /admin/users/{id}             one user's detail + workspace memberships
+  POST  /admin/users                  create a user directly (+ optional workspace assignment)
+  PATCH /admin/users/{id}             block / unblock / grant superuser
+  POST  /admin/users/{id}/reset-password  set a new password directly
+  POST  /admin/users/{id}/impersonate impersonate — get an access/refresh token as this user
+  POST  /admin/users/{id}/workspaces  add this user to a workspace with a role
+  GET   /admin/audit-logs             platform-level admin action log
 """
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.dependencies.auth import get_current_user
 from app.core.database import get_db
+from app.core.security import create_token_pair, hash_password_async
 from app.models.contact import Contact
-from app.models.identity import User, Workspace, WorkspaceMember
+from app.models.identity import Role, User, Workspace, WorkspaceMember
 from app.models.messaging import Conversation, Message
+from app.models.platform import PlatformAuditLog
 from app.models.whatsapp import WhatsAppAccount
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -30,6 +38,17 @@ async def require_superuser(user: User = Depends(get_current_user)) -> User:
     if not user.is_superuser:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Superadmin only.")
     return user
+
+
+async def _log_admin_action(
+    db: AsyncSession, actor_id: uuid.UUID, action: str,
+    target_user_id: uuid.UUID | None = None, ip: str | None = None, **meta,
+) -> None:
+    db.add(PlatformAuditLog(
+        actor_id=actor_id, action=action, target_user_id=target_user_id,
+        ip_address=ip, metadata_=meta,
+    ))
+    await db.flush()
 
 
 # ─── Schemas ─────────────────────────────────────────────────────────────
@@ -74,6 +93,45 @@ class UpdateWorkspaceAdmin(BaseModel):
 class UpdateUserAdmin(BaseModel):
     is_active: bool | None = None
     is_superuser: bool | None = None
+
+
+class CreateUserAdmin(BaseModel):
+    full_name: str = Field(min_length=2, max_length=255)
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+    workspace_id: uuid.UUID | None = None
+    role_name: str | None = Field(default=None, description="Required if workspace_id is set (e.g. Admin, Manager, Agent)")
+
+
+class ResetPasswordAdmin(BaseModel):
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class AddToWorkspaceAdmin(BaseModel):
+    workspace_id: uuid.UUID
+    role_name: str
+
+
+class ImpersonateResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    impersonated_user: AdminUserRow
+
+
+class UserDetailAdmin(AdminUserRow):
+    workspace_memberships: list[dict] = []
+
+
+class PlatformAuditLogRow(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    action: str
+    actor_id: uuid.UUID | None
+    target_user_id: uuid.UUID | None
+    ip_address: str | None
+    metadata_: dict
+    created_at: datetime
 
 
 # ─── Routes ──────────────────────────────────────────────────────────────
@@ -229,3 +287,199 @@ async def update_user_admin(
         is_active=user.is_active, is_superuser=user.is_superuser,
         created_at=user.created_at,
     )
+
+
+@router.get("/users/{user_id}", response_model=UserDetailAdmin)
+async def get_user_admin(
+    user_id: uuid.UUID,
+    _: User = Depends(require_superuser),
+    db: AsyncSession = Depends(get_db),
+):
+    user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    rows = (await db.execute(
+        select(WorkspaceMember, Workspace, Role)
+        .join(Workspace, Workspace.id == WorkspaceMember.workspace_id)
+        .join(Role, Role.id == WorkspaceMember.role_id)
+        .where(WorkspaceMember.user_id == user_id)
+    )).all()
+    memberships = [
+        {"workspace_id": str(ws.id), "workspace_name": ws.name, "role": role.name, "member_id": str(m.id)}
+        for m, ws, role in rows
+    ]
+    return UserDetailAdmin(
+        id=user.id, full_name=user.full_name, email=user.email,
+        is_active=user.is_active, is_superuser=user.is_superuser,
+        created_at=user.created_at, workspaces=len(memberships),
+        workspace_memberships=memberships,
+    )
+
+
+@router.post("/users", response_model=AdminUserRow, status_code=201)
+async def create_user_admin(
+    payload: CreateUserAdmin,
+    request: Request,
+    actor: User = Depends(require_superuser),
+    db: AsyncSession = Depends(get_db),
+):
+    """Creates a user directly from the platform side — no signup
+    email verification flow. Optionally attaches them to a workspace
+    with a role in the same call."""
+    existing = (await db.execute(select(User).where(User.email == payload.email.lower()))).scalar_one_or_none()
+    if existing is not None:
+        raise HTTPException(status_code=409, detail="A user with this email already exists.")
+
+    if payload.workspace_id and not payload.role_name:
+        raise HTTPException(status_code=400, detail="role_name is required when workspace_id is set.")
+
+    user = User(
+        full_name=payload.full_name,
+        email=payload.email.lower(),
+        hashed_password=await hash_password_async(payload.password),
+        is_active=True,
+    )
+    db.add(user)
+    await db.flush()
+
+    if payload.workspace_id:
+        ws = (await db.execute(select(Workspace).where(Workspace.id == payload.workspace_id))).scalar_one_or_none()
+        if ws is None:
+            raise HTTPException(status_code=404, detail="Workspace not found.")
+        role = (await db.execute(select(Role).where(Role.name == payload.role_name))).scalar_one_or_none()
+        if role is None:
+            raise HTTPException(status_code=404, detail=f"Role '{payload.role_name}' not found.")
+        db.add(WorkspaceMember(workspace_id=ws.id, user_id=user.id, role_id=role.id))
+
+    await _log_admin_action(
+        db, actor.id, "user_created", target_user_id=user.id,
+        ip=request.client.host if request.client else None,
+        email=user.email, workspace_id=str(payload.workspace_id) if payload.workspace_id else None,
+    )
+    await db.flush()
+
+    return AdminUserRow(
+        id=user.id, full_name=user.full_name, email=user.email,
+        is_active=user.is_active, is_superuser=user.is_superuser,
+        created_at=user.created_at, workspaces=1 if payload.workspace_id else 0,
+    )
+
+
+@router.post("/users/{user_id}/reset-password", response_model=dict)
+async def reset_password_admin(
+    user_id: uuid.UUID,
+    payload: ResetPasswordAdmin,
+    request: Request,
+    actor: User = Depends(require_superuser),
+    db: AsyncSession = Depends(get_db),
+):
+    user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+    user.hashed_password = await hash_password_async(payload.new_password)
+    await _log_admin_action(
+        db, actor.id, "password_reset", target_user_id=user.id,
+        ip=request.client.host if request.client else None,
+    )
+    await db.flush()
+    return {"ok": True}
+
+
+@router.post("/users/{user_id}/workspaces", response_model=dict)
+async def add_user_to_workspace_admin(
+    user_id: uuid.UUID,
+    payload: AddToWorkspaceAdmin,
+    request: Request,
+    actor: User = Depends(require_superuser),
+    db: AsyncSession = Depends(get_db),
+):
+    user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+    ws = (await db.execute(select(Workspace).where(Workspace.id == payload.workspace_id))).scalar_one_or_none()
+    if ws is None:
+        raise HTTPException(status_code=404, detail="Workspace not found.")
+    role = (await db.execute(select(Role).where(Role.name == payload.role_name))).scalar_one_or_none()
+    if role is None:
+        raise HTTPException(status_code=404, detail=f"Role '{payload.role_name}' not found.")
+
+    existing = (await db.execute(
+        select(WorkspaceMember).where(
+            WorkspaceMember.user_id == user_id, WorkspaceMember.workspace_id == payload.workspace_id
+        )
+    )).scalar_one_or_none()
+    if existing is not None:
+        existing.role_id = role.id
+    else:
+        db.add(WorkspaceMember(workspace_id=ws.id, user_id=user_id, role_id=role.id))
+
+    await _log_admin_action(
+        db, actor.id, "user_added_to_workspace", target_user_id=user_id,
+        ip=request.client.host if request.client else None,
+        workspace_id=str(ws.id), role=payload.role_name,
+    )
+    await db.flush()
+    return {"ok": True}
+
+
+@router.post("/users/{user_id}/impersonate", response_model=ImpersonateResponse)
+async def impersonate_user(
+    user_id: uuid.UUID,
+    request: Request,
+    actor: User = Depends(require_superuser),
+    db: AsyncSession = Depends(get_db),
+):
+    """Issues a real access/refresh token pair for the target user, so
+    the superadmin can see the product exactly as that user does —
+    for support/debugging. Every impersonation is logged (who, whom,
+    when, from what IP). Impersonating another superuser is blocked
+    to avoid privilege-escalation surprises; deactivated users can't
+    be impersonated either (they can't normally log in themselves,
+    an impersonation session shouldn't bypass that)."""
+    target = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    if target is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+    if target.is_superuser:
+        raise HTTPException(status_code=403, detail="Cannot impersonate another superadmin.")
+    if not target.is_active:
+        raise HTTPException(status_code=400, detail="Cannot impersonate a deactivated user.")
+
+    access_token, refresh_token = create_token_pair(target.id)
+
+    await _log_admin_action(
+        db, actor.id, "impersonation_started", target_user_id=target.id,
+        ip=request.client.host if request.client else None,
+        target_email=target.email,
+    )
+    await db.flush()
+
+    return ImpersonateResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        impersonated_user=AdminUserRow(
+            id=target.id, full_name=target.full_name, email=target.email,
+            is_active=target.is_active, is_superuser=target.is_superuser,
+            created_at=target.created_at,
+        ),
+    )
+
+
+@router.get("/audit-logs", response_model=list[PlatformAuditLogRow])
+async def list_platform_audit_logs(
+    action: str | None = Query(None),
+    _: User = Depends(require_superuser),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = select(PlatformAuditLog).order_by(PlatformAuditLog.created_at.desc()).limit(200)
+    if action:
+        stmt = stmt.where(PlatformAuditLog.action == action)
+    rows = (await db.execute(stmt)).scalars().all()
+    return [
+        PlatformAuditLogRow(
+            id=r.id, action=r.action, actor_id=r.actor_id, target_user_id=r.target_user_id,
+            ip_address=str(r.ip_address) if r.ip_address else None,
+            metadata_=r.metadata_, created_at=r.created_at,
+        )
+        for r in rows
+    ]

@@ -20,7 +20,7 @@ from app.models.automation import Automation, ChatbotFlow, ChatbotRule, FlowSess
 from app.models.crm import CRMLead, CRMTask, Ticket
 from app.models.billing import Invoice, Subscription
 from app.models.ai_config import AiAuditLog, AiSettings, AiUsageLog
-from app.models.platform import AuditLog, KnowledgeDocument, OutboundWebhook
+from app.models.platform import AuditLog, KnowledgeDocument, OutboundWebhook, PlatformAuditLog
 from app.models.api_key import ApiKey
 from app.models.flow_builder import ExecutionLog, FlowExecution, FlowVersion
 
@@ -51,6 +51,7 @@ __all__ = [
     "Subscription",
     "Invoice",
     "AuditLog",
+    "PlatformAuditLog",
     "OutboundWebhook",
     "KnowledgeDocument",
     "AiSettings",

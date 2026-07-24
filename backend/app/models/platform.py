@@ -13,6 +13,26 @@ from app.models.base import Base, TenantMixin, TimestampMixin, UUIDMixin
 EMBEDDING_DIMENSIONS = 1536  # text-embedding-3-small
 
 
+class PlatformAuditLog(Base, UUIDMixin, TimestampMixin):
+    """Superadmin actions that aren't scoped to a single workspace —
+    impersonation, direct user creation, cross-tenant changes. Kept
+    separate from AuditLog (which requires a workspace_id via
+    TenantMixin) since these platform-level actions often don't have
+    one meaningful workspace to attach to."""
+    __tablename__ = "platform_audit_logs"
+    __table_args__ = (Index("ix_platform_audit_created", "created_at"),)
+
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    action: Mapped[str] = mapped_column(String(128), nullable=False)
+    target_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    ip_address: Mapped[str | None] = mapped_column(INET)
+    metadata_: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
+
+
 class AuditLog(Base, UUIDMixin, TimestampMixin, TenantMixin):
     __tablename__ = "audit_logs"
     __table_args__ = (Index("ix_audit_logs_ws_created", "workspace_id", "created_at"),)

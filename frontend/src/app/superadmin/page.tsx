@@ -7,16 +7,19 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  BookUser, Building2, LogOut, MessageSquare, Phone, Search,
+  BookUser, Building2, LogIn, LogOut, MessageSquare, Phone, Search,
   ShieldCheck, UserPlus, Users as UsersIcon,
 } from "lucide-react";
 
 import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { api } from "@/lib/api";
-import { clearTokens } from "@/lib/auth-storage";
+import { api, getErrorMessage } from "@/lib/api";
+import { clearTokens, setTokens } from "@/lib/auth-storage";
 import { cn } from "@/lib/utils";
 import type { MeResponse } from "@/types/auth";
 
@@ -45,6 +48,11 @@ export default function SuperAdminPanel() {
   const [userRows, setUserRows] = useState<UserRow[]>([]);
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [impersonating, setImpersonating] = useState<string | null>(null);
+  const [addUserOpen, setAddUserOpen] = useState(false);
+  const [savingUser, setSavingUser] = useState(false);
+  const [newUser, setNewUser] = useState({ full_name: "", email: "", password: "", workspace_id: "", role_name: "" });
 
   // ── Guard: superuser only ──
   useEffect(() => {
@@ -57,6 +65,8 @@ export default function SuperAdminPanel() {
       .catch(() => router.replace("/superadmin/login"));
   }, [router]);
 
+  const [roles, setRoles] = useState<{ id: string; name: string }[]>([]);
+
   const load = useCallback(async () => {
     try {
       const [o, w, u] = await Promise.all([
@@ -67,6 +77,10 @@ export default function SuperAdminPanel() {
       setOverview(o.data); setWsRows(w.data); setUserRows(u.data);
     } catch { setError("Data load failed"); }
   }, [search]);
+
+  useEffect(() => {
+    api.get<{ id: string; name: string }[]>("/workspaces/roles").then(({ data }) => setRoles(data)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (checking) return;
@@ -101,6 +115,48 @@ export default function SuperAdminPanel() {
   const handleLogout = () => {
     clearTokens();
     router.replace("/superadmin/login");
+  };
+
+  const loginAsUser = async (userId: string, userEmail: string) => {
+    if (!confirm(`${userEmail} ke roop mein login karoge? Tumhara superadmin session yahan se replace ho jaayega — dobara superadmin panel access karne ke liye phir se login karna padega.`)) return;
+    setImpersonating(userId);
+    try {
+      const { data } = await api.post<{ access_token: string; refresh_token: string }>(`/admin/users/${userId}/impersonate`);
+      setTokens(data.access_token, data.refresh_token);
+      window.location.href = "/dashboard";
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Impersonation failed"));
+      setImpersonating(null);
+    }
+  };
+
+  const createUser = async () => {
+    if (!newUser.full_name.trim() || !newUser.email.trim() || newUser.password.length < 8) {
+      setError("Naam, email zaroori hain — password kam se kam 8 characters ka ho");
+      return;
+    }
+    if (newUser.workspace_id && !newUser.role_name) {
+      setError("Workspace select kiya hai toh Role bhi select karo");
+      return;
+    }
+    setSavingUser(true); setError(null);
+    try {
+      await api.post("/admin/users", {
+        full_name: newUser.full_name.trim(),
+        email: newUser.email.trim(),
+        password: newUser.password,
+        workspace_id: newUser.workspace_id || null,
+        role_name: newUser.role_name || null,
+      });
+      setSuccess("User create ho gaya!");
+      setAddUserOpen(false);
+      setNewUser({ full_name: "", email: "", password: "", workspace_id: "", role_name: "" });
+      await load();
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "User create failed"));
+    } finally {
+      setSavingUser(false);
+    }
   };
 
   if (checking) {
@@ -148,6 +204,7 @@ export default function SuperAdminPanel() {
 
       <div className="mx-auto max-w-6xl p-4 sm:p-6">
         {error && <Alert variant="destructive" className="mb-4">{error}</Alert>}
+        {success && <Alert variant="success" className="mb-4">{success}</Alert>}
 
         {/* Stats */}
         <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
@@ -228,9 +285,16 @@ export default function SuperAdminPanel() {
               </button>
             ))}
           </div>
-          <div className="relative w-full sm:w-64">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={`Search ${tab}...`} className="pl-8" />
+          <div className="flex w-full items-center gap-2 sm:w-auto">
+            <div className="relative w-full sm:w-64">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={`Search ${tab}...`} className="pl-8" />
+            </div>
+            {tab === "users" && (
+              <Button size="sm" onClick={() => setAddUserOpen(true)} className="whitespace-nowrap">
+                <UserPlus className="h-4 w-4" /> Add User
+              </Button>
+            )}
           </div>
         </div>
 
@@ -296,6 +360,7 @@ export default function SuperAdminPanel() {
                     <th className="px-4 py-3">Joined</th>
                     <th className="px-4 py-3">Superadmin</th>
                     <th className="px-4 py-3">Active</th>
+                    <th className="px-4 py-3">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -328,10 +393,24 @@ export default function SuperAdminPanel() {
                           disabled={u.id === me?.id}
                         />
                       </td>
+                      <td className="px-4 py-3">
+                        {!u.is_superuser && u.is_active && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => loginAsUser(u.id, u.email)}
+                            disabled={impersonating === u.id}
+                            title="Is user ke roop mein login karo (support/debugging ke liye)"
+                          >
+                            <LogIn className="h-3.5 w-3.5" />
+                            {impersonating === u.id ? "..." : "Login as"}
+                          </Button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                   {userRows.length === 0 && (
-                    <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">No users</td></tr>
+                    <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">No users</td></tr>
                   )}
                 </tbody>
               </table>
@@ -339,6 +418,73 @@ export default function SuperAdminPanel() {
           </div>
         )}
       </div>
+
+      {/* ── Add User Dialog ── */}
+      <Dialog open={addUserOpen} onClose={() => setAddUserOpen(false)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Naya User Add Karo</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Full Name</Label>
+              <Input
+                value={newUser.full_name}
+                onChange={(e) => setNewUser({ ...newUser, full_name: e.target.value })}
+                placeholder="Rahul Sharma"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Email</Label>
+              <Input
+                type="email"
+                value={newUser.email}
+                onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                placeholder="rahul@example.com"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Password</Label>
+              <Input
+                type="password"
+                value={newUser.password}
+                onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                placeholder="Kam se kam 8 characters"
+              />
+            </div>
+            <div className="rounded-lg border border-border p-3">
+              <p className="mb-2 text-xs font-medium text-muted-foreground">Workspace mein add karo (optional)</p>
+              <div className="grid grid-cols-2 gap-2">
+                <Select
+                  value={newUser.workspace_id}
+                  onChange={(e) => setNewUser({ ...newUser, workspace_id: e.target.value })}
+                >
+                  <option value="">Koi workspace nahi</option>
+                  {wsRows.map((w) => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
+                  ))}
+                </Select>
+                <Select
+                  value={newUser.role_name}
+                  onChange={(e) => setNewUser({ ...newUser, role_name: e.target.value })}
+                  disabled={!newUser.workspace_id}
+                >
+                  <option value="">Role select karo</option>
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.name}>{r.name}</option>
+                  ))}
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddUserOpen(false)}>Cancel</Button>
+            <Button onClick={createUser} disabled={savingUser}>
+              {savingUser ? "Creating..." : "Create User"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
