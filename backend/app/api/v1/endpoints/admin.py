@@ -99,8 +99,13 @@ class CreateUserAdmin(BaseModel):
     full_name: str = Field(min_length=2, max_length=255)
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
-    workspace_id: uuid.UUID | None = None
-    role_name: str | None = Field(default=None, description="Required if workspace_id is set (e.g. Admin, Manager, Agent)")
+    # Exactly one of these two — a user with zero workspaces is a
+    # dead end in this app: the dashboard bounces them to /signup for
+    # having no workspace, and /signup then rejects them because the
+    # email already exists. Always assign (or create) one.
+    workspace_id: uuid.UUID | None = Field(default=None, description="Add to this EXISTING workspace")
+    role_name: str | None = Field(default=None, description="Required with workspace_id — e.g. Admin, Manager, Agent")
+    new_workspace_name: str | None = Field(default=None, min_length=2, max_length=255, description="Create a BRAND NEW workspace with this user as owner, instead of joining an existing one")
 
 
 class ResetPasswordAdmin(BaseModel):
@@ -108,8 +113,9 @@ class ResetPasswordAdmin(BaseModel):
 
 
 class AddToWorkspaceAdmin(BaseModel):
-    workspace_id: uuid.UUID
-    role_name: str
+    workspace_id: uuid.UUID | None = None
+    role_name: str | None = None
+    new_workspace_name: str | None = Field(default=None, min_length=2, max_length=255)
 
 
 class ImpersonateResponse(BaseModel):
@@ -325,14 +331,33 @@ async def create_user_admin(
     db: AsyncSession = Depends(get_db),
 ):
     """Creates a user directly from the platform side — no signup
-    email verification flow. Optionally attaches them to a workspace
-    with a role in the same call."""
+    email verification flow. Always assigns them to a workspace in
+    the same call — either an EXISTING one (workspace_id + role_name)
+    or a BRAND NEW one (new_workspace_name, user becomes its owner
+    with the default Admin role) — see CreateUserAdmin docstring for
+    why a workspace is mandatory, not optional."""
+    if bool(payload.workspace_id) == bool(payload.new_workspace_name):
+        raise HTTPException(
+            status_code=400,
+            detail="Pick exactly one: an existing workspace_id, or a new_workspace_name to create a fresh one.",
+        )
+    if payload.workspace_id and not payload.role_name:
+        raise HTTPException(status_code=400, detail="role_name is required when joining an existing workspace.")
+
     existing = (await db.execute(select(User).where(User.email == payload.email.lower()))).scalar_one_or_none()
     if existing is not None:
         raise HTTPException(status_code=409, detail="A user with this email already exists.")
 
-    if payload.workspace_id and not payload.role_name:
-        raise HTTPException(status_code=400, detail="role_name is required when workspace_id is set.")
+    role: Role | None = None
+    ws: Workspace | None = None
+
+    if payload.workspace_id:
+        ws = (await db.execute(select(Workspace).where(Workspace.id == payload.workspace_id))).scalar_one_or_none()
+        if ws is None:
+            raise HTTPException(status_code=404, detail="Workspace not found.")
+        role = (await db.execute(select(Role).where(Role.name == payload.role_name))).scalar_one_or_none()
+        if role is None:
+            raise HTTPException(status_code=404, detail=f"Role '{payload.role_name}' not found.")
 
     user = User(
         full_name=payload.full_name,
@@ -343,26 +368,38 @@ async def create_user_admin(
     db.add(user)
     await db.flush()
 
-    if payload.workspace_id:
-        ws = (await db.execute(select(Workspace).where(Workspace.id == payload.workspace_id))).scalar_one_or_none()
-        if ws is None:
-            raise HTTPException(status_code=404, detail="Workspace not found.")
-        role = (await db.execute(select(Role).where(Role.name == payload.role_name))).scalar_one_or_none()
-        if role is None:
-            raise HTTPException(status_code=404, detail=f"Role '{payload.role_name}' not found.")
-        db.add(WorkspaceMember(workspace_id=ws.id, user_id=user.id, role_id=role.id))
+    if payload.new_workspace_name:
+        # Same pattern as normal signup: fresh workspace, this user
+        # becomes its owner with the platform's default Admin role.
+        from app.repositories.workspace_repository import WorkspaceRepository
+        from app.services.auth_service import _unique_slug
+        from app.utils.rbac_seed import default_role_name
+
+        workspace_repo = WorkspaceRepository(db)
+        admin_role = (await db.execute(select(Role).where(Role.name == default_role_name()))).scalar_one_or_none()
+        if admin_role is None:
+            raise HTTPException(status_code=500, detail="RBAC roles are not seeded.")
+
+        slug = await _unique_slug(workspace_repo, payload.new_workspace_name)
+        ws = Workspace(name=payload.new_workspace_name, slug=slug, owner_id=user.id, plan="free")
+        db.add(ws)
+        await db.flush()
+        role = admin_role
+
+    db.add(WorkspaceMember(workspace_id=ws.id, user_id=user.id, role_id=role.id))
 
     await _log_admin_action(
         db, actor.id, "user_created", target_user_id=user.id,
         ip=request.client.host if request.client else None,
-        email=user.email, workspace_id=str(payload.workspace_id) if payload.workspace_id else None,
+        email=user.email, workspace_id=str(ws.id),
+        workspace_mode="new" if payload.new_workspace_name else "existing",
     )
     await db.flush()
 
     return AdminUserRow(
         id=user.id, full_name=user.full_name, email=user.email,
         is_active=user.is_active, is_superuser=user.is_superuser,
-        created_at=user.created_at, workspaces=1 if payload.workspace_id else 0,
+        created_at=user.created_at, workspaces=1,
     )
 
 
@@ -394,19 +431,47 @@ async def add_user_to_workspace_admin(
     actor: User = Depends(require_superuser),
     db: AsyncSession = Depends(get_db),
 ):
+    if bool(payload.workspace_id) == bool(payload.new_workspace_name):
+        raise HTTPException(
+            status_code=400,
+            detail="Pick exactly one: an existing workspace_id, or a new_workspace_name to create a fresh one.",
+        )
+    if payload.workspace_id and not payload.role_name:
+        raise HTTPException(status_code=400, detail="role_name is required when joining an existing workspace.")
+
     user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=404, detail="User not found.")
-    ws = (await db.execute(select(Workspace).where(Workspace.id == payload.workspace_id))).scalar_one_or_none()
-    if ws is None:
-        raise HTTPException(status_code=404, detail="Workspace not found.")
-    role = (await db.execute(select(Role).where(Role.name == payload.role_name))).scalar_one_or_none()
-    if role is None:
-        raise HTTPException(status_code=404, detail=f"Role '{payload.role_name}' not found.")
+
+    role: Role | None = None
+    ws: Workspace | None = None
+
+    if payload.workspace_id:
+        ws = (await db.execute(select(Workspace).where(Workspace.id == payload.workspace_id))).scalar_one_or_none()
+        if ws is None:
+            raise HTTPException(status_code=404, detail="Workspace not found.")
+        role = (await db.execute(select(Role).where(Role.name == payload.role_name))).scalar_one_or_none()
+        if role is None:
+            raise HTTPException(status_code=404, detail=f"Role '{payload.role_name}' not found.")
+    else:
+        from app.repositories.workspace_repository import WorkspaceRepository
+        from app.services.auth_service import _unique_slug
+        from app.utils.rbac_seed import default_role_name
+
+        workspace_repo = WorkspaceRepository(db)
+        admin_role = (await db.execute(select(Role).where(Role.name == default_role_name()))).scalar_one_or_none()
+        if admin_role is None:
+            raise HTTPException(status_code=500, detail="RBAC roles are not seeded.")
+
+        slug = await _unique_slug(workspace_repo, payload.new_workspace_name)
+        ws = Workspace(name=payload.new_workspace_name, slug=slug, owner_id=user.id, plan="free")
+        db.add(ws)
+        await db.flush()
+        role = admin_role
 
     existing = (await db.execute(
         select(WorkspaceMember).where(
-            WorkspaceMember.user_id == user_id, WorkspaceMember.workspace_id == payload.workspace_id
+            WorkspaceMember.user_id == user_id, WorkspaceMember.workspace_id == ws.id
         )
     )).scalar_one_or_none()
     if existing is not None:
@@ -417,7 +482,8 @@ async def add_user_to_workspace_admin(
     await _log_admin_action(
         db, actor.id, "user_added_to_workspace", target_user_id=user_id,
         ip=request.client.host if request.client else None,
-        workspace_id=str(ws.id), role=payload.role_name,
+        workspace_id=str(ws.id), role=role.name,
+        workspace_mode="new" if payload.new_workspace_name else "existing",
     )
     await db.flush()
     return {"ok": True}

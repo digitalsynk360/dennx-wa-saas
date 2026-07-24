@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  BookUser, Building2, LogIn, LogOut, MessageSquare, Phone, Search,
+  AlertTriangle, BookUser, Building2, LogIn, LogOut, MessageSquare, Phone, Search,
   ShieldCheck, UserPlus, Users as UsersIcon,
 } from "lucide-react";
 
@@ -52,7 +52,12 @@ export default function SuperAdminPanel() {
   const [impersonating, setImpersonating] = useState<string | null>(null);
   const [addUserOpen, setAddUserOpen] = useState(false);
   const [savingUser, setSavingUser] = useState(false);
-  const [newUser, setNewUser] = useState({ full_name: "", email: "", password: "", workspace_id: "", role_name: "" });
+  const [newUser, setNewUser] = useState({ full_name: "", email: "", password: "", workspace_id: "", role_name: "", new_workspace_name: "" });
+  const [wsMode, setWsMode] = useState<"existing" | "new">("existing");
+  const [assignWsUser, setAssignWsUser] = useState<UserRow | null>(null);
+  const [assignWsForm, setAssignWsForm] = useState({ workspace_id: "", role_name: "", new_workspace_name: "" });
+  const [assignWsMode, setAssignWsMode] = useState<"existing" | "new">("existing");
+  const [assigningWs, setAssigningWs] = useState(false);
 
   // ── Guard: superuser only ──
   useEffect(() => {
@@ -144,8 +149,12 @@ export default function SuperAdminPanel() {
       setError("Naam, email zaroori hain — password kam se kam 8 characters ka ho");
       return;
     }
-    if (newUser.workspace_id && !newUser.role_name) {
-      setError("Workspace select kiya hai toh Role bhi select karo");
+    if (wsMode === "existing" && (!newUser.workspace_id || !newUser.role_name)) {
+      setError("Workspace aur Role dono select karo — ya 'Naya Workspace' tab pe switch karo.");
+      return;
+    }
+    if (wsMode === "new" && !newUser.new_workspace_name.trim()) {
+      setError("Naye workspace ka naam do");
       return;
     }
     setSavingUser(true); setError(null);
@@ -154,17 +163,48 @@ export default function SuperAdminPanel() {
         full_name: newUser.full_name.trim(),
         email: newUser.email.trim(),
         password: newUser.password,
-        workspace_id: newUser.workspace_id || null,
-        role_name: newUser.role_name || null,
+        ...(wsMode === "existing"
+          ? { workspace_id: newUser.workspace_id, role_name: newUser.role_name }
+          : { new_workspace_name: newUser.new_workspace_name.trim() }),
       });
-      setSuccess("User create ho gaya!");
+      setSuccess(wsMode === "new" ? "User + naya workspace dono create ho gaye!" : "User create ho gaya!");
       setAddUserOpen(false);
-      setNewUser({ full_name: "", email: "", password: "", workspace_id: "", role_name: "" });
+      setNewUser({ full_name: "", email: "", password: "", workspace_id: "", role_name: "", new_workspace_name: "" });
+      setWsMode("existing");
       await load();
     } catch (e: unknown) {
       setError(getErrorMessage(e, "User create failed"));
     } finally {
       setSavingUser(false);
+    }
+  };
+
+  const assignWorkspaceToUser = async () => {
+    if (!assignWsUser) return;
+    if (assignWsMode === "existing" && (!assignWsForm.workspace_id || !assignWsForm.role_name)) {
+      setError("Workspace aur Role dono select karo");
+      return;
+    }
+    if (assignWsMode === "new" && !assignWsForm.new_workspace_name.trim()) {
+      setError("Naye workspace ka naam do");
+      return;
+    }
+    setAssigningWs(true); setError(null);
+    try {
+      await api.post(`/admin/users/${assignWsUser.id}/workspaces`,
+        assignWsMode === "existing"
+          ? { workspace_id: assignWsForm.workspace_id, role_name: assignWsForm.role_name }
+          : { new_workspace_name: assignWsForm.new_workspace_name.trim() }
+      );
+      setSuccess(`${assignWsUser.email} ab workspace mein add ho gaya — ab login kar payega!`);
+      setAssignWsUser(null);
+      setAssignWsForm({ workspace_id: "", role_name: "", new_workspace_name: "" });
+      setAssignWsMode("existing");
+      await load();
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Workspace assign failed"));
+    } finally {
+      setAssigningWs(false);
     }
   };
 
@@ -403,18 +443,31 @@ export default function SuperAdminPanel() {
                         />
                       </td>
                       <td className="px-4 py-3">
-                        {!u.is_superuser && u.is_active && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => loginAsUser(u.id, u.email)}
-                            disabled={impersonating === u.id}
-                            title="Is user ke roop mein login karo (support/debugging ke liye)"
-                          >
-                            <LogIn className="h-3.5 w-3.5" />
-                            {impersonating === u.id ? "..." : "Login as"}
-                          </Button>
-                        )}
+                        <div className="flex items-center gap-1.5">
+                          {!u.is_superuser && u.is_active && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => loginAsUser(u.id, u.email)}
+                              disabled={impersonating === u.id}
+                              title="Is user ke roop mein login karo (support/debugging ke liye)"
+                            >
+                              <LogIn className="h-3.5 w-3.5" />
+                              {impersonating === u.id ? "..." : "Login as"}
+                            </Button>
+                          )}
+                          {u.workspaces === 0 && !u.is_superuser && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setAssignWsUser(u)}
+                              className="text-amber-600 hover:bg-amber-50"
+                              title="Is user ke paas koi workspace nahi hai — bina workspace ke yeh login karne ke baad stuck ho jaayega"
+                            >
+                              <AlertTriangle className="h-3.5 w-3.5" /> Fix: No Workspace
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -462,34 +515,136 @@ export default function SuperAdminPanel() {
               />
             </div>
             <div className="rounded-lg border border-border p-3">
-              <p className="mb-2 text-xs font-medium text-muted-foreground">Workspace mein add karo (optional)</p>
-              <div className="grid grid-cols-2 gap-2">
-                <Select
-                  value={newUser.workspace_id}
-                  onChange={(e) => setNewUser({ ...newUser, workspace_id: e.target.value })}
-                >
-                  <option value="">Koi workspace nahi</option>
-                  {wsRows.map((w) => (
-                    <option key={w.id} value={w.id}>{w.name}</option>
-                  ))}
-                </Select>
-                <Select
-                  value={newUser.role_name}
-                  onChange={(e) => setNewUser({ ...newUser, role_name: e.target.value })}
-                  disabled={!newUser.workspace_id}
-                >
-                  <option value="">Role select karo</option>
-                  {roles.map((r) => (
-                    <option key={r.id} value={r.name}>{r.name}</option>
-                  ))}
-                </Select>
+              <p className="mb-2 text-xs font-medium text-muted-foreground">Workspace * (zaroori)</p>
+              <div className="mb-2 flex rounded-lg border border-border bg-muted p-0.5">
+                {([["existing", "Existing Workspace"], ["new", "Naya Workspace Banao"]] as const).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setWsMode(id)}
+                    className={cn(
+                      "flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
+                      wsMode === id ? "bg-white shadow-sm" : "text-muted-foreground"
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
+
+              {wsMode === "existing" ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <Select
+                    value={newUser.workspace_id}
+                    onChange={(e) => setNewUser({ ...newUser, workspace_id: e.target.value })}
+                  >
+                    <option value="">Workspace select karo *</option>
+                    {wsRows.map((w) => (
+                      <option key={w.id} value={w.id}>{w.name}</option>
+                    ))}
+                  </Select>
+                  <Select
+                    value={newUser.role_name}
+                    onChange={(e) => setNewUser({ ...newUser, role_name: e.target.value })}
+                    disabled={!newUser.workspace_id}
+                  >
+                    <option value="">Role select karo *</option>
+                    {roles.map((r) => (
+                      <option key={r.id} value={r.name}>{r.name}</option>
+                    ))}
+                  </Select>
+                </div>
+              ) : (
+                <div>
+                  <Input
+                    value={newUser.new_workspace_name}
+                    onChange={(e) => setNewUser({ ...newUser, new_workspace_name: e.target.value })}
+                    placeholder="Naye workspace ka naam (jaise: Rahul's Business)"
+                  />
+                  <p className="mt-1.5 text-[10px] text-muted-foreground">
+                    User is naye workspace ka <strong>owner + Admin</strong> banega
+                  </p>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddUserOpen(false)}>Cancel</Button>
             <Button onClick={createUser} disabled={savingUser}>
               {savingUser ? "Creating..." : "Create User"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Fix: Assign Workspace (for orphaned 0-workspace users) ── */}
+      <Dialog open={assignWsUser !== null} onClose={() => setAssignWsUser(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Workspace Assign Karo</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              <strong>{assignWsUser?.email}</strong> ke paas abhi koi workspace nahi hai — isliye yeh login karne ke baad stuck ho jaata hai.
+            </p>
+            <div className="flex rounded-lg border border-border bg-muted p-0.5">
+              {([["existing", "Existing Workspace"], ["new", "Naya Workspace Banao"]] as const).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setAssignWsMode(id)}
+                  className={cn(
+                    "flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
+                    assignWsMode === id ? "bg-white shadow-sm" : "text-muted-foreground"
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {assignWsMode === "existing" ? (
+              <>
+                <div className="space-y-1.5">
+                  <Label>Workspace</Label>
+                  <Select
+                    value={assignWsForm.workspace_id}
+                    onChange={(e) => setAssignWsForm({ ...assignWsForm, workspace_id: e.target.value })}
+                  >
+                    <option value="">Workspace select karo</option>
+                    {wsRows.map((w) => (
+                      <option key={w.id} value={w.id}>{w.name}</option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Role</Label>
+                  <Select
+                    value={assignWsForm.role_name}
+                    onChange={(e) => setAssignWsForm({ ...assignWsForm, role_name: e.target.value })}
+                  >
+                    <option value="">Role select karo</option>
+                    {roles.map((r) => (
+                      <option key={r.id} value={r.name}>{r.name}</option>
+                    ))}
+                  </Select>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-1.5">
+                <Label>Naye Workspace ka Naam</Label>
+                <Input
+                  value={assignWsForm.new_workspace_name}
+                  onChange={(e) => setAssignWsForm({ ...assignWsForm, new_workspace_name: e.target.value })}
+                  placeholder="jaise: Rahul's Business"
+                />
+                <p className="text-[10px] text-muted-foreground">User is naye workspace ka owner + Admin banega</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignWsUser(null)}>Cancel</Button>
+            <Button onClick={assignWorkspaceToUser} disabled={assigningWs}>
+              {assigningWs ? "Assigning..." : "Assign"}
             </Button>
           </DialogFooter>
         </DialogContent>
