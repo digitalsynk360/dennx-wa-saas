@@ -1,7 +1,9 @@
 """
 WhatsApp account + webhook endpoints.
 
-  POST /whatsapp/connect           connect with credentials
+  POST /whatsapp/embedded-signup/complete   real Meta Embedded Signup (recommended)
+  GET  /whatsapp/embedded-signup/config     app_id + config_id for the frontend SDK
+  POST /whatsapp/connect           connect with credentials (manual fallback, support use only)
   DELETE /whatsapp/disconnect      disconnect
   GET  /whatsapp/account           get connected account info
   GET  /webhooks/whatsapp          Meta webhook verification
@@ -16,11 +18,39 @@ from app.api.v1.dependencies.workspace import WorkspaceContext, get_workspace_co
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.identity import User
-from app.schemas.whatsapp import ConnectWhatsAppRequest, WhatsAppAccountResponse
+from app.schemas.whatsapp import ConnectWhatsAppRequest, EmbeddedSignupCompleteRequest, WhatsAppAccountResponse
 from app.services import whatsapp_service, webhook_service
 
 router = APIRouter(tags=["whatsapp"])
 webhook_router = APIRouter(tags=["webhooks"])
+
+
+@router.get("/whatsapp/embedded-signup/config")
+async def embedded_signup_config(
+    ctx: WorkspaceContext = Depends(require_permission("workspace.manage")),
+):
+    """Public (non-secret) values the frontend needs to init the
+    Facebook SDK and launch the Embedded Signup popup. The App
+    Secret is never sent to the browser — only used server-side
+    during the code exchange."""
+    return {
+        "app_id": settings.META_APP_ID,
+        "config_id": settings.META_EMBEDDED_SIGNUP_CONFIG_ID,
+        "configured": bool(settings.META_APP_ID and settings.META_APP_SECRET and settings.META_EMBEDDED_SIGNUP_CONFIG_ID),
+    }
+
+
+@router.post("/whatsapp/embedded-signup/complete", response_model=WhatsAppAccountResponse, status_code=201)
+async def complete_embedded_signup(
+    payload: EmbeddedSignupCompleteRequest,
+    ctx: WorkspaceContext = Depends(require_permission("workspace.manage")),
+    db: AsyncSession = Depends(get_db),
+):
+    """One-click finish: exchanges the code, registers the phone
+    number, subscribes webhooks, and stores everything — see
+    whatsapp_service.complete_embedded_signup for the full flow."""
+    account = await whatsapp_service.complete_embedded_signup(db, ctx.workspace.id, payload)
+    return WhatsAppAccountResponse.model_validate(account)
 
 
 @router.post("/whatsapp/connect", response_model=WhatsAppAccountResponse, status_code=201)
@@ -29,8 +59,11 @@ async def connect(
     ctx: WorkspaceContext = Depends(require_permission("workspace.manage")),
     db: AsyncSession = Depends(get_db),
 ):
+    """Manual credentials fallback — not used by the normal onboarding
+    UI, kept for support/recovery scenarios only."""
     account = await whatsapp_service.connect_account(db, ctx.workspace.id, payload)
     return WhatsAppAccountResponse.model_validate(account)
+
 
 
 @router.delete("/whatsapp/disconnect", status_code=204)

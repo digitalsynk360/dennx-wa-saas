@@ -14,6 +14,18 @@ class ConnectWhatsAppRequest(BaseModel):
     access_token: str = Field(min_length=1)   # plain — encrypted before DB save
 
 
+class EmbeddedSignupCompleteRequest(BaseModel):
+    """What the frontend sends after Meta's Embedded Signup popup
+    finishes — an exchangeable auth code (from FB.login's authResponse)
+    plus the waba_id/phone_number_id Meta posts via window.postMessage
+    (event type WA_EMBEDDED_SIGNUP). No token, WABA ID or phone number
+    ID is ever typed by the user — Meta hands all three of these to
+    the browser automatically when the popup completes."""
+    code: str = Field(min_length=1)
+    waba_id: str = Field(min_length=1)
+    phone_number_id: str = Field(min_length=1)
+
+
 class WhatsAppAccountResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
