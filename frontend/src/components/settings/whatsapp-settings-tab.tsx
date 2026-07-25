@@ -3,15 +3,23 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { api, getErrorMessage } from "@/lib/api";
 import type { WhatsAppAccountResponse } from "@/types/whatsapp";
 
 /**
- * Real Meta Embedded Signup (Tech Provider flow) — see
+ * Primary: real Meta Embedded Signup (Tech Provider flow) — see
  * backend/app/services/whatsapp_service.py for the full server-side
  * half. The customer never sees or types an App ID, App Secret,
  * access token, WABA ID or phone number ID — Meta's own popup
  * collects everything and hands it back to this page automatically.
+ *
+ * Fallback: a manual credentials form, collapsed under "Advanced",
+ * for cases where Embedded Signup itself is unavailable (e.g. the
+ * Meta app is still in Development Mode / missing Business
+ * Verification / App Review) — same backend endpoint that existed
+ * before Embedded Signup was built.
  */
 
 declare global {
@@ -46,6 +54,12 @@ export function WhatsAppSettingsTab() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [config, setConfig] = useState<{ app_id: string; config_id: string; configured: boolean } | null>(null);
+  const [showManual, setShowManual] = useState(false);
+  const [savingManual, setSavingManual] = useState(false);
+  const [manualForm, setManualForm] = useState({
+    waba_id: "", phone_number_id: "", display_phone_number: "",
+    business_name: "", access_token: "",
+  });
 
   // Holds whichever pieces have arrived so far — the popup's
   // `code` (from FB.login's callback) and `waba_id`/`phone_number_id`
@@ -175,6 +189,25 @@ export function WhatsAppSettingsTab() {
     }
   };
 
+  const handleManualConnect = async () => {
+    if (!manualForm.waba_id.trim() || !manualForm.phone_number_id.trim() || !manualForm.access_token.trim()) {
+      setError("WABA ID, Phone Number ID aur Access Token zaroori hain");
+      return;
+    }
+    setSavingManual(true); setError(null);
+    try {
+      const { data } = await api.post<WhatsAppAccountResponse>("/whatsapp/connect", manualForm);
+      setAccount(data);
+      setSuccess("WhatsApp manually connect ho gaya!");
+      setManualForm({ waba_id: "", phone_number_id: "", display_phone_number: "", business_name: "", access_token: "" });
+      setShowManual(false);
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Manual connect fail hua"));
+    } finally {
+      setSavingManual(false);
+    }
+  };
+
   if (loading) {
     return <div className="max-w-2xl text-sm text-muted-foreground">Loading...</div>;
   }
@@ -237,6 +270,79 @@ export function WhatsAppSettingsTab() {
           <div className="mt-4 border-t border-border pt-4">
             <Button variant="outline" onClick={handleDisconnect} className="border-red-200 text-red-600 hover:bg-red-50">
               Disconnect
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* ── Manual fallback — for when Embedded Signup itself is unavailable ── */}
+      <div className="mt-6 rounded-lg border border-border bg-white p-5">
+        <button
+          type="button"
+          onClick={() => setShowManual((s) => !s)}
+          className="flex w-full items-center justify-between text-left"
+        >
+          <div>
+            <h3 className="font-semibold">Advanced: Manual Setup</h3>
+            <p className="text-sm text-muted-foreground">
+              Agar &quot;Connect WhatsApp&quot; kaam na kare (Meta app abhi Development mode mein ho ya verification pending ho), yahan se manually credentials daal sakte ho.
+            </p>
+          </div>
+          <span className="ml-3 text-lg text-muted-foreground">{showManual ? "−" : "+"}</span>
+        </button>
+
+        {showManual && (
+          <div className="mt-4 space-y-4 border-t border-border pt-4">
+            <p className="text-xs text-muted-foreground">
+              Yeh values Meta App Dashboard → WhatsApp → API Setup mein milti hain.
+            </p>
+            <div className="space-y-1.5">
+              <Label>Business Name</Label>
+              <Input
+                placeholder="Deenx Consultancy"
+                value={manualForm.business_name}
+                onChange={(e) => setManualForm((f) => ({ ...f, business_name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Phone Number ID *</Label>
+              <Input
+                placeholder="106911733..."
+                value={manualForm.phone_number_id}
+                onChange={(e) => setManualForm((f) => ({ ...f, phone_number_id: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>WABA ID *</Label>
+              <Input
+                placeholder="133294082..."
+                value={manualForm.waba_id}
+                onChange={(e) => setManualForm((f) => ({ ...f, waba_id: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Display Phone Number</Label>
+              <Input
+                placeholder="+91 98969 00461"
+                value={manualForm.display_phone_number}
+                onChange={(e) => setManualForm((f) => ({ ...f, display_phone_number: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Permanent Access Token *</Label>
+              <Input
+                type="password"
+                placeholder="EAAxxxxxxx..."
+                value={manualForm.access_token}
+                onChange={(e) => setManualForm((f) => ({ ...f, access_token: e.target.value }))}
+              />
+              <p className="text-[10px] text-muted-foreground">Token encrypt karke store hota hai — kabhi plain text mein nahi rehta.</p>
+            </div>
+            <Button
+              onClick={handleManualConnect}
+              disabled={savingManual || !manualForm.waba_id || !manualForm.phone_number_id || !manualForm.access_token}
+            >
+              {savingManual ? "Connecting..." : "Manually Connect"}
             </Button>
           </div>
         )}
