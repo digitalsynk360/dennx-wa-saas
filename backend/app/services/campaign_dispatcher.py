@@ -147,6 +147,15 @@ async def launch_campaign(db: AsyncSession, workspace_id: uuid.UUID, campaign_id
     campaign that auto-paused (failure-rate guardrail) or auto-queued
     (hit its daily safe-send cap) — both need the same "Resume" action
     from the user, no separate endpoint."""
+    from app.services import billing_service
+
+    sub = await billing_service.get_or_create_subscription(db, workspace_id)
+    if billing_service.is_expired(sub):
+        raise HTTPException(
+            status_code=402,
+            detail="Your plan has expired — existing data is still visible, but new campaigns can't be sent until the plan is renewed. Contact your account admin.",
+        )
+
     repo = CampaignRepository(db)
     campaign = await repo.get_with_recipients(campaign_id, workspace_id)
     if campaign is None:

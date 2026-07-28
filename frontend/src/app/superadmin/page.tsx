@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  AlertTriangle, BookUser, Building2, LogIn, LogOut, MessageSquare, Phone, Search,
+  AlertTriangle, BookUser, Building2, CreditCard, LogIn, LogOut, MessageSquare, Phone, Search,
   ShieldCheck, UserPlus, Users as UsersIcon,
 } from "lucide-react";
 
@@ -35,14 +35,35 @@ interface UserRow {
   id: string; full_name: string; email: string; is_active: boolean;
   is_superuser: boolean; created_at: string; workspaces: number;
 }
+interface PlanCatalogEntry {
+  plan: string; label: string; monthly_price_paise: number | null;
+  messages: number | null; contacts: number | null; seats: number | null;
+  whatsapp_numbers: number | null; ai_chatbot: boolean;
+}
+interface SubscriptionInfo {
+  plan: string; billing_cycle: string; status: string;
+  monthly_message_quota: number | null; contact_limit: number | null; seats: number;
+  whatsapp_number_limit: number | null; ai_chatbot_enabled: boolean; addons: Record<string, unknown>;
+  base_price_paise: number; gst_percent: number;
+  current_period_start: string | null; current_period_end: string | null; trial_used: boolean;
+}
+interface PricePreview {
+  base_price_paise: number; addons_price_paise: number; subtotal_paise: number;
+  gst_paise: number; total_paise: number; months: number;
+}
+interface DemoLead {
+  id: string; full_name: string; business_name: string; phone: string; email: string;
+  business_type: string | null; message: string | null; status: string;
+  admin_notes: string | null; contacted_at: string | null; created_at: string;
+}
 
-const PLANS = ["free", "starter", "growth", "scale"];
+const rupees = (paise: number) => `₹${(paise / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
 export default function SuperAdminPanel() {
   const router = useRouter();
   const [me, setMe] = useState<MeResponse["user"] | null>(null);
   const [checking, setChecking] = useState(true);
-  const [tab, setTab] = useState<"workspaces" | "users">("workspaces");
+  const [tab, setTab] = useState<"workspaces" | "users" | "leads">("workspaces");
   const [overview, setOverview] = useState<Overview | null>(null);
   const [wsRows, setWsRows] = useState<WsRow[]>([]);
   const [userRows, setUserRows] = useState<UserRow[]>([]);
@@ -57,9 +78,62 @@ export default function SuperAdminPanel() {
   const [assignWsUser, setAssignWsUser] = useState<UserRow | null>(null);
   const [assignWsForm, setAssignWsForm] = useState({ workspace_id: "", role_name: "", new_workspace_name: "" });
   const [assignWsMode, setAssignWsMode] = useState<"existing" | "new">("existing");
+
+  // ── Plan management (per-workspace) ──
+  const [planExpiry, setPlanExpiry] = useState<Record<string, string | null>>({});
+  const [planCatalog, setPlanCatalog] = useState<PlanCatalogEntry[]>([]);
+  const [planDialogWs, setPlanDialogWs] = useState<WsRow | null>(null);
+  const [planSub, setPlanSub] = useState<SubscriptionInfo | null>(null);
+  const [planTab, setPlanTab] = useState<"assign" | "edit">("assign");
+  const [planForm, setPlanForm] = useState({
+    plan: "starter", billing_cycle: "monthly",
+    extra_seats: 0, extra_numbers: 0, extra_contacts_blocks: 0,
+    ai_chatbot: false, priority_support: false,
+    custom_monthly_rupees: "",
+  });
+  const [planPreview, setPlanPreview] = useState<PricePreview | null>(null);
+  const [planSaving, setPlanSaving] = useState(false);
+  const [editForm, setEditForm] = useState({
+    seats: "", contact_limit: "", whatsapp_number_limit: "", monthly_message_quota: "",
+    current_period_end: "", status: "",
+  });
   const [assigningWs, setAssigningWs] = useState(false);
 
-  // ── Guard: superuser only ──
+  // ── Demo Requests (leads) ──
+  const [leadRows, setLeadRows] = useState<DemoLead[]>([]);
+  const [leadDialog, setLeadDialog] = useState<DemoLead | null>(null);
+  const [leadNotes, setLeadNotes] = useState("");
+  const [leadSaving, setLeadSaving] = useState(false);
+  const newLeadCount = leadRows.filter((l) => l.status === "new").length;
+
+  const loadLeads = useCallback(async () => {
+    try {
+      const { data } = await api.get<DemoLead[]>("/admin/demo-requests");
+      setLeadRows(data);
+    } catch { setError("Demo requests load failed"); }
+  }, []);
+
+  useEffect(() => { loadLeads(); }, [loadLeads]);
+
+  const updateLeadStatus = async (id: string, status: string) => {
+    try {
+      await api.patch(`/admin/demo-requests/${id}`, { status });
+      await loadLeads();
+    } catch { setError("Update failed"); }
+  };
+
+  const saveLeadNotes = async () => {
+    if (!leadDialog) return;
+    setLeadSaving(true);
+    try {
+      await api.patch(`/admin/demo-requests/${leadDialog.id}`, { admin_notes: leadNotes });
+      setLeadDialog(null);
+      await loadLeads();
+    } catch { setError("Notes save failed"); }
+    finally { setLeadSaving(false); }
+  };
+
+
   useEffect(() => {
     api.get<MeResponse>("/auth/me")
       .then(({ data }) => {
@@ -85,7 +159,20 @@ export default function SuperAdminPanel() {
 
   useEffect(() => {
     api.get<{ id: string; name: string }[]>("/workspaces/roles").then(({ data }) => setRoles(data)).catch(() => {});
+    api.get<PlanCatalogEntry[]>("/admin/plans/catalog").then(({ data }) => setPlanCatalog(data)).catch(() => {});
   }, []);
+
+  // Real per-workspace expiry dates — shown in the Workspaces table.
+  useEffect(() => {
+    if (wsRows.length === 0) return;
+    Promise.all(
+      wsRows.map((w) =>
+        api.get<SubscriptionInfo>(`/admin/workspaces/${w.id}/subscription`)
+          .then(({ data }) => [w.id, data.current_period_end] as const)
+          .catch(() => [w.id, null] as const)
+      )
+    ).then((pairs) => setPlanExpiry(Object.fromEntries(pairs)));
+  }, [wsRows]);
 
   useEffect(() => {
     if (checking) return;
@@ -93,11 +180,108 @@ export default function SuperAdminPanel() {
     return () => clearTimeout(t);
   }, [checking, load]);
 
-  const changePlan = async (id: string, plan: string) => {
+  const openPlanDialog = async (w: WsRow) => {
+    setPlanDialogWs(w);
+    setPlanTab("assign");
+    setPlanPreview(null);
     try {
-      await api.patch(`/admin/workspaces/${id}`, { plan });
-      setWsRows((r) => r.map((w) => (w.id === id ? { ...w, plan } : w)));
-    } catch { setError("Plan update failed"); }
+      const { data } = await api.get<SubscriptionInfo>(`/admin/workspaces/${w.id}/subscription`);
+      setPlanSub(data);
+      setPlanForm({
+        plan: data.plan === "trial" ? "starter" : data.plan,
+        billing_cycle: data.billing_cycle === "trial" ? "monthly" : data.billing_cycle,
+        extra_seats: Number(data.addons?.extra_seats || 0),
+        extra_numbers: Number(data.addons?.extra_numbers || 0),
+        extra_contacts_blocks: Number(data.addons?.extra_contacts_blocks || 0),
+        ai_chatbot: Boolean(data.addons?.ai_chatbot),
+        priority_support: Boolean(data.addons?.priority_support),
+        custom_monthly_rupees: "",
+      });
+      setEditForm({
+        seats: String(data.seats ?? ""),
+        contact_limit: data.contact_limit != null ? String(data.contact_limit) : "",
+        whatsapp_number_limit: data.whatsapp_number_limit != null ? String(data.whatsapp_number_limit) : "",
+        monthly_message_quota: data.monthly_message_quota != null ? String(data.monthly_message_quota) : "",
+        current_period_end: data.current_period_end ? data.current_period_end.slice(0, 10) : "",
+        status: data.status,
+      });
+    } catch { setError("Subscription load failed"); }
+  };
+
+  const refreshPlanPreview = useCallback(async () => {
+    if (!planDialogWs) return;
+    try {
+      const addons: Record<string, unknown> = {};
+      if (planForm.extra_seats) addons.extra_seats = planForm.extra_seats;
+      if (planForm.extra_numbers) addons.extra_numbers = planForm.extra_numbers;
+      if (planForm.extra_contacts_blocks) addons.extra_contacts_blocks = planForm.extra_contacts_blocks;
+      if (planForm.ai_chatbot) addons.ai_chatbot = true;
+      if (planForm.priority_support) addons.priority_support = true;
+      const { data } = await api.post<PricePreview>("/admin/plans/preview", {
+        plan: planForm.plan, billing_cycle: planForm.billing_cycle, addons,
+        custom_monthly_paise: planForm.plan === "enterprise" && planForm.custom_monthly_rupees
+          ? Math.round(Number(planForm.custom_monthly_rupees) * 100) : null,
+      });
+      setPlanPreview(data);
+    } catch { /* preview is best-effort */ }
+  }, [planDialogWs, planForm]);
+
+  useEffect(() => { if (planDialogWs) refreshPlanPreview(); }, [planDialogWs, refreshPlanPreview]);
+
+  const submitAssignPlan = async () => {
+    if (!planDialogWs) return;
+    setPlanSaving(true); setError(null);
+    try {
+      const addons: Record<string, unknown> = {};
+      if (planForm.extra_seats) addons.extra_seats = planForm.extra_seats;
+      if (planForm.extra_numbers) addons.extra_numbers = planForm.extra_numbers;
+      if (planForm.extra_contacts_blocks) addons.extra_contacts_blocks = planForm.extra_contacts_blocks;
+      if (planForm.ai_chatbot) addons.ai_chatbot = true;
+      if (planForm.priority_support) addons.priority_support = true;
+      await api.post(`/admin/workspaces/${planDialogWs.id}/subscription/assign`, {
+        plan: planForm.plan, billing_cycle: planForm.billing_cycle, addons,
+        custom_monthly_paise: planForm.plan === "enterprise" && planForm.custom_monthly_rupees
+          ? Math.round(Number(planForm.custom_monthly_rupees) * 100) : null,
+      });
+      setSuccess(`Plan assigned: ${planForm.plan} (${planForm.billing_cycle})`);
+      setPlanDialogWs(null);
+      await load();
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Plan assign failed"));
+    } finally { setPlanSaving(false); }
+  };
+
+  const submitRenewPlan = async () => {
+    if (!planDialogWs) return;
+    setPlanSaving(true); setError(null);
+    try {
+      await api.post(`/admin/workspaces/${planDialogWs.id}/subscription/renew`);
+      setSuccess("Plan renewed!");
+      setPlanDialogWs(null);
+      await load();
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Renew failed — trial plans can't be renewed, assign a paid plan instead."));
+    } finally { setPlanSaving(false); }
+  };
+
+  const submitEditPlan = async () => {
+    if (!planDialogWs) return;
+    setPlanSaving(true); setError(null);
+    try {
+      await api.patch(`/admin/workspaces/${planDialogWs.id}/subscription`, {
+        seats: editForm.seats ? Number(editForm.seats) : null,
+        contact_limit: editForm.contact_limit ? Number(editForm.contact_limit) : null,
+        whatsapp_number_limit: editForm.whatsapp_number_limit ? Number(editForm.whatsapp_number_limit) : null,
+        monthly_message_quota: editForm.monthly_message_quota ? Number(editForm.monthly_message_quota) : null,
+        current_period_end: editForm.current_period_end ? new Date(editForm.current_period_end).toISOString() : null,
+        status: editForm.status || null,
+      });
+      setSuccess("Subscription updated!");
+      setPlanDialogWs(null);
+      await load();
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Edit failed"));
+    } finally { setPlanSaving(false); }
   };
 
   const toggleWs = async (id: string, is_active: boolean) => {
@@ -159,7 +343,7 @@ export default function SuperAdminPanel() {
     }
     setSavingUser(true); setError(null);
     try {
-      await api.post("/admin/users", {
+      const { data: created } = await api.post<{ id: string }>("/admin/users", {
         full_name: newUser.full_name.trim(),
         email: newUser.email.trim(),
         password: newUser.password,
@@ -167,11 +351,25 @@ export default function SuperAdminPanel() {
           ? { workspace_id: newUser.workspace_id, role_name: newUser.role_name }
           : { new_workspace_name: newUser.new_workspace_name.trim() }),
       });
-      setSuccess(wsMode === "new" ? "User + naya workspace dono create ho gaye!" : "User create ho gaya!");
+      setSuccess(wsMode === "new" ? "User + naya workspace dono create ho gaye! Ab plan assign karo." : "User create ho gaya! Ab plan assign karo.");
       setAddUserOpen(false);
       setNewUser({ full_name: "", email: "", password: "", workspace_id: "", role_name: "", new_workspace_name: "" });
       setWsMode("existing");
       await load();
+
+      // Jump straight into the plan dialog for their workspace — a
+      // brand-new user has zero plan otherwise (just the 3-day
+      // trial), so this is almost always the very next thing an
+      // admin wants to do after creating someone.
+      try {
+        const { data: detail } = await api.get<{ workspace_memberships: { workspace_id: string }[] }>(`/admin/users/${created.id}`);
+        const wsId = detail.workspace_memberships[0]?.workspace_id;
+        if (wsId) {
+          const { data: freshWs } = await api.get<WsRow[]>("/admin/workspaces", { params: { search: "" } });
+          const ws = freshWs.find((w) => w.id === wsId);
+          if (ws) await openPlanDialog(ws);
+        }
+      } catch { /* not critical — admin can still open Manage Plan manually */ }
     } catch (e: unknown) {
       setError(getErrorMessage(e, "User create failed"));
     } finally {
@@ -278,7 +476,7 @@ export default function SuperAdminPanel() {
               <p className="text-sm text-muted-foreground">No workspaces</p>
             ) : (
               <div className="space-y-2">
-                {PLANS.filter((p) => planCounts[p]).map((p) => {
+                {Object.keys(planCounts).filter((p) => planCounts[p]).map((p) => {
                   const total = wsRows.length || 1;
                   const pct = Math.round(((planCounts[p] || 0) / total) * 100);
                   return (
@@ -321,24 +519,31 @@ export default function SuperAdminPanel() {
         {/* Tabs + search */}
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex rounded-lg border border-border bg-white p-0.5">
-            {(["workspaces", "users"] as const).map((t) => (
+            {([["workspaces", "Workspaces"], ["users", "Users"], ["leads", "Demo Requests"]] as const).map(([t, label]) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
                 className={cn(
-                  "rounded-md px-4 py-1.5 text-sm font-medium capitalize transition-colors",
+                  "flex items-center gap-1.5 rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
                   tab === t ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                {t}
+                {label}
+                {t === "leads" && newLeadCount > 0 && (
+                  <span className={cn("rounded-full px-1.5 text-xs font-bold", tab === t ? "bg-white/25" : "bg-red-100 text-red-600")}>
+                    {newLeadCount}
+                  </span>
+                )}
               </button>
             ))}
           </div>
           <div className="flex w-full items-center gap-2 sm:w-auto">
-            <div className="relative w-full sm:w-64">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={`Search ${tab}...`} className="pl-8" />
-            </div>
+            {tab !== "leads" && (
+              <div className="relative w-full sm:w-64">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={`Search ${tab}...`} className="pl-8" />
+              </div>
+            )}
             {tab === "users" && (
               <Button size="sm" onClick={() => setAddUserOpen(true)} className="whitespace-nowrap">
                 <UserPlus className="h-4 w-4" /> Add User
@@ -356,11 +561,13 @@ export default function SuperAdminPanel() {
                   <tr>
                     <th className="px-4 py-3">Workspace</th>
                     <th className="px-4 py-3">Plan</th>
+                    <th className="px-4 py-3">Expires</th>
                     <th className="px-4 py-3">Members</th>
                     <th className="px-4 py-3">Contacts</th>
                     <th className="px-4 py-3">Msgs (30d)</th>
                     <th className="px-4 py-3">Created</th>
                     <th className="px-4 py-3">Active</th>
+                    <th className="px-4 py-3">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -368,13 +575,10 @@ export default function SuperAdminPanel() {
                     <tr key={w.id} className={cn(!w.is_active && "opacity-50")}>
                       <td className="px-4 py-3 font-medium">{w.name}</td>
                       <td className="px-4 py-3">
-                        <Select
-                          value={w.plan}
-                          onChange={(e) => changePlan(w.id, e.target.value)}
-                          className="h-8 w-28 text-xs"
-                        >
-                          {PLANS.map((p) => <option key={p} value={p}>{p}</option>)}
-                        </Select>
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium capitalize">{w.plan}</span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
+                        {planExpiry[w.id] ? new Date(planExpiry[w.id]!).toLocaleDateString() : "—"}
                       </td>
                       <td className="px-4 py-3">{w.members}</td>
                       <td className="px-4 py-3">{w.contacts}</td>
@@ -385,10 +589,15 @@ export default function SuperAdminPanel() {
                       <td className="px-4 py-3">
                         <Switch size="sm" checked={w.is_active} onCheckedChange={(v) => toggleWs(w.id, v)} />
                       </td>
+                      <td className="px-4 py-3">
+                        <Button variant="outline" size="sm" onClick={() => openPlanDialog(w)}>
+                          <CreditCard className="h-3.5 w-3.5" /> Manage Plan
+                        </Button>
+                      </td>
                     </tr>
                   ))}
                   {wsRows.length === 0 && (
-                    <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">No workspaces</td></tr>
+                    <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">No workspaces</td></tr>
                   )}
                 </tbody>
               </table>
@@ -473,6 +682,74 @@ export default function SuperAdminPanel() {
                   ))}
                   {userRows.length === 0 && (
                     <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">No users</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Demo Requests table */}
+        {tab === "leads" && (
+          <div className="rounded-lg border border-border bg-white">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-border text-xs uppercase text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3">Name</th>
+                    <th className="px-4 py-3">Business</th>
+                    <th className="px-4 py-3">Contact</th>
+                    <th className="px-4 py-3">Type</th>
+                    <th className="px-4 py-3">Received</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Notes</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {leadRows.map((l) => (
+                    <tr key={l.id}>
+                      <td className="px-4 py-3 font-medium">{l.full_name}</td>
+                      <td className="px-4 py-3">{l.business_name}</td>
+                      <td className="px-4 py-3">
+                        <div className="text-xs">
+                          <a href={`tel:${l.phone}`} className="block hover:underline">{l.phone}</a>
+                          <a href={`mailto:${l.email}`} className="block text-muted-foreground hover:underline">{l.email}</a>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">{l.business_type || "—"}</td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
+                        {new Date(l.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Select
+                          value={l.status}
+                          onChange={(e) => updateLeadStatus(l.id, e.target.value)}
+                          className={cn(
+                            "h-8 w-32 text-xs font-medium",
+                            l.status === "new" && "text-blue-600",
+                            l.status === "contacted" && "text-amber-600",
+                            l.status === "converted" && "text-green-600",
+                            l.status === "rejected" && "text-red-500"
+                          )}
+                        >
+                          <option value="new">New</option>
+                          <option value="contacted">Contacted</option>
+                          <option value="converted">Converted</option>
+                          <option value="rejected">Rejected</option>
+                        </Select>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Button
+                          variant="outline" size="sm"
+                          onClick={() => { setLeadDialog(l); setLeadNotes(l.admin_notes || ""); }}
+                        >
+                          {l.admin_notes ? "Edit Notes" : "Add Notes"}
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                  {leadRows.length === 0 && (
+                    <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">No demo requests yet</td></tr>
                   )}
                 </tbody>
               </table>
@@ -646,6 +923,186 @@ export default function SuperAdminPanel() {
             <Button onClick={assignWorkspaceToUser} disabled={assigningWs}>
               {assigningWs ? "Assigning..." : "Assign"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Manage Plan (Assign / Renew / Edit) ── */}
+      <Dialog open={planDialogWs !== null} onClose={() => setPlanDialogWs(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Manage Plan — {planDialogWs?.name}</DialogTitle>
+          </DialogHeader>
+
+          {planSub && (
+            <div className="mb-3 rounded-lg bg-muted p-3 text-xs">
+              <div className="flex justify-between"><span className="text-muted-foreground">Current Plan</span><span className="font-semibold capitalize">{planSub.plan} ({planSub.billing_cycle})</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Status</span><span className={cn("font-semibold capitalize", planSub.status === "active" ? "text-green-600" : "text-red-600")}>{planSub.status}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Expires</span><span>{planSub.current_period_end ? new Date(planSub.current_period_end).toLocaleDateString() : "Never"}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Seats / Contacts</span><span>{planSub.seats} / {planSub.contact_limit ?? "∞"}</span></div>
+            </div>
+          )}
+
+          <div className="mb-3 flex rounded-lg border border-border bg-muted p-0.5">
+            {([["assign", "Assign / Change Plan"], ["edit", "Manual Edit"]] as const).map(([id, label]) => (
+              <button
+                key={id} type="button" onClick={() => setPlanTab(id)}
+                className={cn("flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors", planTab === id ? "bg-white shadow-sm" : "text-muted-foreground")}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {planTab === "assign" && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1.5">
+                  <Label>Plan</Label>
+                  <Select value={planForm.plan} onChange={(e) => setPlanForm({ ...planForm, plan: e.target.value })}>
+                    {planCatalog.filter((p) => p.plan !== "trial").map((p) => (
+                      <option key={p.plan} value={p.plan}>{p.label}</option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Billing Cycle</Label>
+                  <Select value={planForm.billing_cycle} onChange={(e) => setPlanForm({ ...planForm, billing_cycle: e.target.value })}>
+                    <option value="monthly">Monthly</option>
+                    <option value="quarterly">Quarterly (12% off)</option>
+                    <option value="yearly">Yearly (25% off)</option>
+                  </Select>
+                </div>
+              </div>
+
+              {planForm.plan === "enterprise" && (
+                <div className="space-y-1.5">
+                  <Label>Custom Monthly Price (₹)</Label>
+                  <Input
+                    type="number" placeholder="25000"
+                    value={planForm.custom_monthly_rupees}
+                    onChange={(e) => setPlanForm({ ...planForm, custom_monthly_rupees: e.target.value })}
+                  />
+                </div>
+              )}
+
+              <div className="rounded-lg border border-border p-3">
+                <p className="mb-2 text-xs font-semibold text-muted-foreground">Add-ons</p>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="space-y-1">
+                    <Label className="text-[11px]">Extra Seats (₹299/ea)</Label>
+                    <Input type="number" min={0} value={planForm.extra_seats}
+                      onChange={(e) => setPlanForm({ ...planForm, extra_seats: Number(e.target.value) })} className="h-8" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[11px]">Extra Numbers (₹1,199/ea)</Label>
+                    <Input type="number" min={0} value={planForm.extra_numbers}
+                      onChange={(e) => setPlanForm({ ...planForm, extra_numbers: Number(e.target.value) })} className="h-8" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[11px]">Extra +5k Contacts (₹239/ea)</Label>
+                    <Input type="number" min={0} value={planForm.extra_contacts_blocks}
+                      onChange={(e) => setPlanForm({ ...planForm, extra_contacts_blocks: Number(e.target.value) })} className="h-8" />
+                  </div>
+                  <div className="flex flex-col justify-center gap-1.5 pt-4">
+                    <label className="flex items-center gap-1.5"><input type="checkbox" checked={planForm.ai_chatbot} onChange={(e) => setPlanForm({ ...planForm, ai_chatbot: e.target.checked })} /> AI Chatbot (₹1,799)</label>
+                    <label className="flex items-center gap-1.5"><input type="checkbox" checked={planForm.priority_support} onChange={(e) => setPlanForm({ ...planForm, priority_support: e.target.checked })} /> Priority Support (₹949)</label>
+                  </div>
+                </div>
+              </div>
+
+              {planPreview && (
+                <div className="rounded-lg bg-primary/5 p-3 text-xs">
+                  <div className="flex justify-between"><span>Subtotal ({planPreview.months} mo)</span><span>{rupees(planPreview.subtotal_paise)}</span></div>
+                  <div className="flex justify-between"><span>GST (18%)</span><span>{rupees(planPreview.gst_paise)}</span></div>
+                  <div className="mt-1 flex justify-between border-t border-border pt-1 text-sm font-bold"><span>Total</span><span>{rupees(planPreview.total_paise)}</span></div>
+                </div>
+              )}
+
+              <Button onClick={submitAssignPlan} disabled={planSaving} className="w-full">
+                {planSaving ? "Assigning..." : "Assign Plan"}
+              </Button>
+            </div>
+          )}
+
+          {planTab === "edit" && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Seats</Label>
+                  <Input value={editForm.seats} onChange={(e) => setEditForm({ ...editForm, seats: e.target.value })} className="h-8" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Contact Limit</Label>
+                  <Input value={editForm.contact_limit} onChange={(e) => setEditForm({ ...editForm, contact_limit: e.target.value })} className="h-8" placeholder="blank = unlimited" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">WhatsApp Numbers</Label>
+                  <Input value={editForm.whatsapp_number_limit} onChange={(e) => setEditForm({ ...editForm, whatsapp_number_limit: e.target.value })} className="h-8" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Message Quota</Label>
+                  <Input value={editForm.monthly_message_quota} onChange={(e) => setEditForm({ ...editForm, monthly_message_quota: e.target.value })} className="h-8" placeholder="blank = unlimited" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Expires On</Label>
+                  <Input type="date" value={editForm.current_period_end} onChange={(e) => setEditForm({ ...editForm, current_period_end: e.target.value })} className="h-8" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Status</Label>
+                  <Select value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })} className="h-8">
+                    <option value="active">Active</option>
+                    <option value="expired">Expired</option>
+                    <option value="cancelled">Cancelled</option>
+                  </Select>
+                </div>
+              </div>
+              <p className="text-[10px] text-muted-foreground">Manual overrides — for goodwill extensions or custom Enterprise limits. Doesn&apos;t change the plan/billing cycle or create an invoice.</p>
+              <Button onClick={submitEditPlan} disabled={planSaving} className="w-full">
+                {planSaving ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
+          )}
+
+          <DialogFooter className="mt-3 justify-between border-t border-border pt-3">
+            <Button
+              variant="outline" onClick={submitRenewPlan} disabled={planSaving || planSub?.plan === "trial"}
+              title={planSub?.plan === "trial" ? "Trial can't be renewed — assign a paid plan" : "Extend current plan by one more billing period"}
+            >
+              🔄 Renew (same plan)
+            </Button>
+            <Button variant="outline" onClick={() => setPlanDialogWs(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Demo Lead Notes ── */}
+      <Dialog open={leadDialog !== null} onClose={() => setLeadDialog(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{leadDialog?.full_name} — {leadDialog?.business_name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            {leadDialog?.message && (
+              <div className="rounded-lg bg-muted p-3 text-sm">
+                <p className="mb-1 text-xs font-semibold text-muted-foreground">Their message</p>
+                <p>{leadDialog.message}</p>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label>Admin Notes</Label>
+              <textarea
+                value={leadNotes}
+                onChange={(e) => setLeadNotes(e.target.value)}
+                rows={4}
+                placeholder="Call ki, interested in Growth plan, follow up next week..."
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLeadDialog(null)}>Cancel</Button>
+            <Button onClick={saveLeadNotes} disabled={leadSaving}>{leadSaving ? "Saving..." : "Save Notes"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

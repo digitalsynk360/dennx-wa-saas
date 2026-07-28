@@ -1,8 +1,9 @@
 """
-Billing & Usage endpoints — Phase 13. Mounted at /api/v1/billing.
+Billing & Usage endpoints — Mounted at /api/v1/billing.
+Read-only for workspace users; plan assignment/renewal/edits happen
+through the Superadmin panel only (see /admin/workspaces/{id}/subscription*).
 
-  GET  /billing/subscription   current plan + period
-  POST /billing/change-plan    switch plan (self-serve, no payment gateway in this phase)
+  GET  /billing/subscription   current plan + period (read-only)
   GET  /billing/invoices       invoice history
   GET  /billing/usage          messages/seats used vs quota
 """
@@ -12,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.dependencies.workspace import WorkspaceContext, require_permission
 from app.core.database import get_db
 from app.schemas.billing import (
-    ChangePlanRequest,
     InvoiceListResponse,
     InvoiceResponse,
     SubscriptionResponse,
@@ -29,16 +29,6 @@ async def get_subscription(
     db: AsyncSession = Depends(get_db),
 ):
     sub = await billing_service.get_or_create_subscription(db, ctx.workspace.id)
-    return SubscriptionResponse.model_validate(sub)
-
-
-@router.post("/change-plan", response_model=SubscriptionResponse)
-async def change_plan(
-    payload: ChangePlanRequest,
-    ctx: WorkspaceContext = Depends(require_permission("billing.manage")),
-    db: AsyncSession = Depends(get_db),
-):
-    sub = await billing_service.change_plan(db, ctx.workspace.id, payload.plan)
     return SubscriptionResponse.model_validate(sub)
 
 

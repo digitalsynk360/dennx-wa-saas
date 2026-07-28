@@ -35,7 +35,7 @@ const FAQS = [
   { q: "Kya mera WhatsApp number ban ho sakta hai?", a: "Nahi. Deenx AI official WhatsApp Business Cloud API par bana hai — Meta ke rules ke andar. Unofficial tools se bilkul alag." },
   { q: "Kya mujhe coding aani chahiye?", a: "Bilkul nahi. Flow builder drag-and-drop hai aur chatbot rules simple form se bante hain." },
   { q: "Existing number use kar sakta hoon?", a: "Haan — koi bhi number jo WhatsApp Business API ke liye eligible hai, minutes mein connect ho jata hai." },
-  { q: "Free trial hai?", a: "Haan, signup karo aur bina card ke platform explore karo. Jab ready ho tab plan choose karna." },
+  { q: "Free trial hai?", a: "Haan — demo book karo, humari team turant 3-din ka free trial activate kar degi, bina card ke." },
 ];
 
 function ChatMockup() {
@@ -95,7 +95,7 @@ export default function Home() {
               <Link href="/login">Sign in</Link>
             </Button>
             <Button asChild>
-              <Link href="/signup">Get Started <ArrowRight className="h-4 w-4" /></Link>
+              <Link href="/demo">Book Free Demo <ArrowRight className="h-4 w-4" /></Link>
             </Button>
           </div>
         </div>
@@ -120,7 +120,7 @@ export default function Home() {
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg" className="text-base">
-                <Link href="/signup">Start Free <ArrowRight className="h-4 w-4" /></Link>
+                <Link href="/demo">Book Free Demo <ArrowRight className="h-4 w-4" /></Link>
               </Button>
               <Button asChild size="lg" variant="outline" className="border-white/30 bg-transparent text-white hover:bg-white/10 text-base">
                 <Link href="/login">Live Demo</Link>
@@ -220,7 +220,7 @@ export default function Home() {
                 ))}
               </ul>
               <Button asChild className="mt-6 w-full" variant={p.popular ? "default" : "outline"}>
-                <Link href="/signup">Choose {p.name}</Link>
+                <Link href="/demo">Talk to Sales</Link>
               </Button>
             </div>
           ))}
@@ -251,7 +251,7 @@ export default function Home() {
           <h2 className="text-3xl font-bold sm:text-4xl">Aaj hi WhatsApp ko apna best salesman banao</h2>
           <p className="mx-auto mt-3 max-w-xl text-white/80">Signup free hai. Setup 5 minute ka hai. Results pehle din se.</p>
           <Button asChild size="lg" className="mt-8 text-base">
-            <Link href="/signup">Get Started Free <ArrowRight className="h-4 w-4" /></Link>
+            <Link href="/demo">Book Free Demo <ArrowRight className="h-4 w-4" /></Link>
           </Button>
         </div>
       </section>
@@ -265,7 +265,7 @@ export default function Home() {
           <p>© {new Date().getFullYear()} Deenx Consultancy. All rights reserved.</p>
           <div className="flex gap-5">
             <Link href="/login" className="hover:text-foreground">Sign in</Link>
-            <Link href="/signup" className="hover:text-foreground">Sign up</Link>
+            <Link href="/demo" className="hover:text-foreground">Book Demo</Link>
           </div>
         </div>
       </footer>

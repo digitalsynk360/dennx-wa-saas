@@ -30,6 +30,11 @@ from app.models.identity import Role, User, Workspace, WorkspaceMember
 from app.models.messaging import Conversation, Message
 from app.models.platform import PlatformAuditLog
 from app.models.whatsapp import WhatsAppAccount
+from app.schemas.billing import (
+    AssignPlanRequest, EditSubscriptionRequest, PlanCatalogEntry,
+    PricePreviewRequest, PricePreviewResponse, SubscriptionResponse,
+)
+from app.services import billing_service
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -549,3 +554,164 @@ async def list_platform_audit_logs(
         )
         for r in rows
     ]
+
+
+# ─── Plan / Subscription management ────────────────────────────────
+
+@router.get("/plans/catalog", response_model=list[PlanCatalogEntry])
+async def get_plan_catalog(_: User = Depends(require_superuser)):
+    """Every sellable plan and its base limits — powers the plan
+    picker in the Add User / workspace-subscription dialogs."""
+    return [
+        PlanCatalogEntry(plan=key, **{k: v for k, v in entry.items() if k != "duration_days"})
+        for key, entry in billing_service.PLAN_CATALOG.items()
+    ]
+
+
+@router.post("/plans/preview", response_model=PricePreviewResponse)
+async def preview_price(
+    payload: PricePreviewRequest,
+    _: User = Depends(require_superuser),
+):
+    """Live price calculation (base + add-ons + GST) as the superadmin
+    picks options — no DB write, just math, for the UI to show a
+    running total before confirming."""
+    pricing = billing_service.compute_price(
+        payload.plan, payload.billing_cycle, payload.addons, payload.custom_monthly_paise
+    )
+    return PricePreviewResponse(**pricing)
+
+
+@router.get("/workspaces/{workspace_id}/subscription", response_model=SubscriptionResponse)
+async def get_workspace_subscription(
+    workspace_id: uuid.UUID,
+    _: User = Depends(require_superuser),
+    db: AsyncSession = Depends(get_db),
+):
+    sub = await billing_service.get_or_create_subscription(db, workspace_id)
+    return SubscriptionResponse.model_validate(sub)
+
+
+@router.post("/workspaces/{workspace_id}/subscription/assign", response_model=SubscriptionResponse)
+async def assign_workspace_plan(
+    workspace_id: uuid.UUID,
+    payload: AssignPlanRequest,
+    request: Request,
+    actor: User = Depends(require_superuser),
+    db: AsyncSession = Depends(get_db),
+):
+    """Set (or switch) a workspace's plan — creates an invoice for
+    the period, replaces limits/add-ons outright."""
+    sub = await billing_service.assign_plan(
+        db, workspace_id, payload.plan, payload.billing_cycle, payload.addons, payload.custom_monthly_paise
+    )
+    await _log_admin_action(
+        db, actor.id, "plan_assigned", ip=request.client.host if request.client else None,
+        workspace_id=str(workspace_id), plan=payload.plan, billing_cycle=payload.billing_cycle,
+    )
+    await db.flush()
+    return SubscriptionResponse.model_validate(sub)
+
+
+@router.post("/workspaces/{workspace_id}/subscription/renew", response_model=SubscriptionResponse)
+async def renew_workspace_plan(
+    workspace_id: uuid.UUID,
+    request: Request,
+    actor: User = Depends(require_superuser),
+    db: AsyncSession = Depends(get_db),
+):
+    """Extend the CURRENT plan by one more billing period — for a
+    straightforward "customer paid again, same plan" renewal."""
+    sub = await billing_service.renew_subscription(db, workspace_id)
+    await _log_admin_action(
+        db, actor.id, "plan_renewed", ip=request.client.host if request.client else None,
+        workspace_id=str(workspace_id), plan=sub.plan, new_period_end=str(sub.current_period_end),
+    )
+    await db.flush()
+    return SubscriptionResponse.model_validate(sub)
+
+
+@router.patch("/workspaces/{workspace_id}/subscription", response_model=SubscriptionResponse)
+async def edit_workspace_subscription(
+    workspace_id: uuid.UUID,
+    payload: EditSubscriptionRequest,
+    request: Request,
+    actor: User = Depends(require_superuser),
+    db: AsyncSession = Depends(get_db),
+):
+    """Manual override of any limit/date/status — goodwill extension,
+    custom Enterprise limits, force-cancel, etc."""
+    sub = await billing_service.edit_subscription(
+        db, workspace_id,
+        seats=payload.seats, contact_limit=payload.contact_limit,
+        whatsapp_number_limit=payload.whatsapp_number_limit,
+        monthly_message_quota=payload.monthly_message_quota,
+        ai_chatbot_enabled=payload.ai_chatbot_enabled,
+        current_period_end=payload.current_period_end, status=payload.status,
+    )
+    await _log_admin_action(
+        db, actor.id, "plan_edited", ip=request.client.host if request.client else None,
+        workspace_id=str(workspace_id), changes=payload.model_dump(exclude_none=True, mode="json"),
+    )
+    await db.flush()
+    return SubscriptionResponse.model_validate(sub)
+
+
+
+# ─── Demo Requests (leads) ──────────────────────────────────────────
+
+class DemoRequestRow(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    full_name: str
+    business_name: str
+    phone: str
+    email: str
+    business_type: str | None
+    message: str | None
+    status: str
+    admin_notes: str | None
+    contacted_at: datetime | None
+    created_at: datetime
+
+
+class UpdateDemoRequestAdmin(BaseModel):
+    status: str | None = None  # new|contacted|converted|rejected
+    admin_notes: str | None = None
+
+
+@router.get("/demo-requests", response_model=list[DemoRequestRow])
+async def list_demo_requests(
+    status_filter: str | None = Query(None, alias="status"),
+    _: User = Depends(require_superuser),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.lead import DemoRequest
+
+    stmt = select(DemoRequest).order_by(DemoRequest.created_at.desc()).limit(500)
+    if status_filter:
+        stmt = stmt.where(DemoRequest.status == status_filter)
+    rows = (await db.execute(stmt)).scalars().all()
+    return [DemoRequestRow.model_validate(r) for r in rows]
+
+
+@router.patch("/demo-requests/{lead_id}", response_model=DemoRequestRow)
+async def update_demo_request(
+    lead_id: uuid.UUID,
+    payload: UpdateDemoRequestAdmin,
+    actor: User = Depends(require_superuser),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.lead import DemoRequest
+
+    lead = (await db.execute(select(DemoRequest).where(DemoRequest.id == lead_id))).scalar_one_or_none()
+    if lead is None:
+        raise HTTPException(status_code=404, detail="Demo request not found.")
+    if payload.status is not None:
+        lead.status = payload.status
+        if payload.status == "contacted" and lead.contacted_at is None:
+            lead.contacted_at = datetime.now(timezone.utc)
+    if payload.admin_notes is not None:
+        lead.admin_notes = payload.admin_notes
+    await db.flush()
+    return DemoRequestRow.model_validate(lead)
