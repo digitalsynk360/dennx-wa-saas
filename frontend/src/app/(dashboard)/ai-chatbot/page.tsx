@@ -20,6 +20,9 @@ import { cn } from "@/lib/utils";
 
 // ─── Types ───────────────────────────────────────────────────────────────
 interface UsageAgg { requests: number; success: number; input_tokens: number; output_tokens: number; cost_usd: number }
+interface CategoryEntry {
+  key: string; label: string; suggested_tools: string[]; implemented_suggested_tools: string[];
+}
 interface Overview {
   status: string; mode: string; provider: string; model: string; enabled: boolean;
   usage: { today: UsageAgg; week: UsageAgg; month: UsageAgg; success_rate: number };
@@ -33,6 +36,7 @@ interface AiSettings {
   temperature: number; top_p: number; frequency_penalty: number; presence_penalty: number;
   max_tokens: number; timeout_s: number;
   assistant_name: string; system_prompt: string; language: string; tone: string;
+  business_category: string | null;
   memory_window: number; summarizer_enabled: boolean;
   crm_confidence: number; crm_auto_apply: boolean;
   error_responses: Record<string, string>;
@@ -85,6 +89,8 @@ const ERROR_TABS: { key: string; label: string; desc: string }[] = [
 ];
 
 const TOOL_META: { key: string; label: string; desc: string }[] = [
+  { key: "generate_itinerary_pdf", label: "Generate Itinerary PDF", desc: "Travel plan PDF banake WhatsApp pe bhejna" },
+  { key: "generate_quotation_pdf", label: "Generate Quotation PDF", desc: "Price quotation PDF banake WhatsApp pe bhejna" },
   { key: "search_product", label: "Search Product", desc: "Catalogue mein products dhundhna" },
   { key: "search_customer", label: "Search Customer", desc: "Contact records access" },
   { key: "search_orders", label: "Search Orders", desc: "Order history dekhna" },
@@ -92,7 +98,7 @@ const TOOL_META: { key: string; label: string; desc: string }[] = [
   { key: "cancel_order", label: "Cancel Order", desc: "Order cancel karna" },
   { key: "refund", label: "Refund", desc: "Refund initiate karna" },
   { key: "payment_link", label: "Payment Link", desc: "Payment link bhejna" },
-  { key: "book_appointment", label: "Book Appointment", desc: "Appointment schedule" },
+  { key: "book_appointment", label: "Book Appointment", desc: "Appointment request note karna (human confirm karta hai)" },
   { key: "crm_update", label: "CRM Update", desc: "Tags/leads update karna" },
   { key: "webhook", label: "Webhook", desc: "External webhook trigger" },
   { key: "api_request", label: "API Request", desc: "Custom API calls" },
@@ -118,6 +124,8 @@ export default function AiChatbotPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [categories, setCategories] = useState<CategoryEntry[]>([]);
+  const [implementedTools, setImplementedTools] = useState<string[]>([]);
 
   // Provider form
   const [apiKey, setApiKey] = useState("");
@@ -296,6 +304,10 @@ export default function AiChatbotPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    api.get<CategoryEntry[]>("/ai-hub/categories").then(({ data }) => setCategories(data)).catch(() => {});
+    api.get<{ implemented_tools: string[] }>("/ai-hub/defaults").then(({ data }) => setImplementedTools(data.implemented_tools)).catch(() => {});
+  }, []);
 
   const loadModels = useCallback(async (provider: string) => {
     setModelsLoading(true);
@@ -592,6 +604,52 @@ export default function AiChatbotPage() {
               />
             </div>
 
+            {/* Business Category — auto-expert persona + suggested tools */}
+            <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-5">
+              <div>
+                <p className="font-semibold">Business Category</p>
+                <p className="text-sm text-muted-foreground">
+                  Apna business type select karo — AI automatically us industry ka expert ban jaayega aur relevant tools suggest karega.
+                </p>
+              </div>
+              <Select
+                value={s.business_category || ""}
+                onChange={(e) => setS({ ...s, business_category: e.target.value || null })}
+                className="max-w-md"
+              >
+                <option value="">Select karo...</option>
+                {categories.map((c) => (
+                  <option key={c.key} value={c.key}>{c.label}</option>
+                ))}
+              </Select>
+              {s.business_category && (() => {
+                const cat = categories.find((c) => c.key === s.business_category);
+                if (!cat) return null;
+                return (
+                  <div className="rounded-lg bg-white p-3 text-xs">
+                    <p className="mb-1.5 font-medium text-muted-foreground">
+                      {cat.label} ke liye recommended tools (Tools tab mein enable karo):
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {cat.suggested_tools.map((t) => (
+                        <span
+                          key={t}
+                          className={cn(
+                            "rounded-full px-2 py-0.5 font-medium",
+                            cat.implemented_suggested_tools.includes(t)
+                              ? "bg-green-100 text-green-700"
+                              : "bg-gray-100 text-gray-500"
+                          )}
+                        >
+                          {t.replace(/_/g, " ")} {cat.implemented_suggested_tools.includes(t) ? "✓" : "(coming soon)"}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
             {/* Assistant persona */}
             <div className="space-y-4 rounded-xl border border-border bg-white p-5">
               <div className="grid gap-4 sm:grid-cols-3">
@@ -663,7 +721,7 @@ export default function AiChatbotPage() {
 
               <Button
                 onClick={() => patch({
-                  assistant_name: s.assistant_name, language: s.language, tone: s.tone,
+                  assistant_name: s.assistant_name, business_category: s.business_category, language: s.language, tone: s.tone,
                   system_prompt: s.system_prompt, temperature: s.temperature, top_p: s.top_p,
                   frequency_penalty: s.frequency_penalty, presence_penalty: s.presence_penalty,
                   max_tokens: s.max_tokens, memory_window: s.memory_window,
@@ -887,16 +945,31 @@ export default function AiChatbotPage() {
               <Wrench className="h-4 w-4 text-primary" />
               <p className="text-sm">
                 <span className="font-semibold">{Object.values(s.tools || {}).filter(Boolean).length} tools enabled</span>
-                <span className="text-muted-foreground"> — toggle karte hi turant register/unregister hota hai, AI agla message se use kar payega</span>
+                <span className="text-muted-foreground"> — sirf ✅ Live tools hi real action lete hain, baaki abhi UI-only hain</span>
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {TOOL_META.map((t) => {
                 const on = Boolean(s.tools?.[t.key]);
+                const isLive = implementedTools.includes(t.key);
+                const currentCat = categories.find((c) => c.key === s.business_category);
+                const isRecommended = currentCat?.suggested_tools.includes(t.key);
                 return (
                   <div key={t.key} className={cn("flex items-start justify-between gap-3 rounded-xl border p-4 transition-colors", on ? "border-primary/40 bg-primary/[0.03]" : "border-border bg-white")}>
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold">{t.label}</p>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="text-sm font-semibold">{t.label}</p>
+                        {isLive ? (
+                          <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-green-700">Live</span>
+                        ) : (
+                          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-gray-500">Coming Soon</span>
+                        )}
+                        {isRecommended && (
+                          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-700">
+                            Recommended for {currentCat!.label}
+                          </span>
+                        )}
+                      </div>
                       <p className="mt-0.5 text-xs text-muted-foreground">{t.desc}</p>
                     </div>
                     <Switch checked={on} onCheckedChange={(v) => toggleTool(t.key, v)} />

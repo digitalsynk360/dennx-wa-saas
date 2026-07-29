@@ -231,7 +231,8 @@ async def _trigger_bot_response(
     from app.services import llm_service
 
     ai_text = await llm_service.generate_ai_reply(
-        db, workspace_id, conversation_id, message_text
+        db, workspace_id, conversation_id, message_text,
+        contact_id=contact.id, ctx=ctx,
     )
     if ai_text:
         await _save_and_broadcast(

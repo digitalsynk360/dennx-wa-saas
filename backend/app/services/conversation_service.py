@@ -264,6 +264,45 @@ async def send_whatsapp_text(
     return data.get("messages", [{}])[0].get("id", "")
 
 
+async def send_whatsapp_document(
+    token: str, phone_number_id: str, to: str,
+    file_bytes: bytes, filename: str, caption: str | None = None,
+) -> str:
+    """Sends a document (PDF etc.) — two-step: upload to Meta's Media
+    API to get a media id, then send a document-type message
+    referencing it. Used by AI tool calls (itinerary/quotation PDFs)
+    and available for any other document-sending need."""
+    upload_url = f"{settings.graph_api_base}/{phone_number_id}/media"
+    async with httpx.AsyncClient(timeout=30) as client:
+        upload_resp = await client.post(
+            upload_url,
+            data={"messaging_product": "whatsapp", "type": "application/pdf"},
+            files={"file": (filename, file_bytes, "application/pdf")},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    if upload_resp.status_code != 200:
+        logger.error("whatsapp_media_upload_failed", status=upload_resp.status_code, body=upload_resp.text)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Meta media upload failed: {upload_resp.text[:200]}")
+    media_id = upload_resp.json().get("id")
+    if not media_id:
+        raise HTTPException(status_code=502, detail="Meta did not return a media id.")
+
+    url = f"{settings.graph_api_base}/{phone_number_id}/messages"
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "document",
+        "document": {"id": media_id, "filename": filename, **({"caption": caption} if caption else {})},
+    }
+    async with httpx.AsyncClient(timeout=15) as client:
+        response = await client.post(url, json=payload, headers={"Authorization": f"Bearer {token}"})
+    if response.status_code != 200:
+        logger.error("whatsapp_document_send_failed", status=response.status_code, body=response.text)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"WhatsApp API error: {response.text}")
+    data = response.json()
+    return data.get("messages", [{}])[0].get("id", "")
+
+
 async def send_whatsapp_interactive_buttons(
     token: str,
     phone_number_id: str,

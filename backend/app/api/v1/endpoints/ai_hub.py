@@ -84,6 +84,7 @@ class SettingsPatch(BaseModel):
     max_tokens: int | None = Field(default=None, ge=1, le=32768)
     timeout_s: int | None = Field(default=None, ge=5, le=300)
     assistant_name: str | None = None
+    business_category: str | None = None  # e.g. "travel_tourism" — see ai_categories.CATEGORY_CATALOG
     system_prompt: str | None = None
     language: str | None = None
     tone: str | None = None
@@ -222,6 +223,7 @@ async def get_settings(
         "max_tokens": s.max_tokens,
         "timeout_s": s.timeout_s,
         "assistant_name": s.assistant_name,
+        "business_category": s.business_category,
         "system_prompt": s.system_prompt,
         "language": s.language,
         "tone": s.tone,
@@ -315,7 +317,7 @@ async def test_connection(
     elif provider == "azure":
         base = (s.base_url or "").rstrip("/")
         if not base or not key:
-            result, detail = "invalid_key", "Azure ke liye Base URL + API key dono chahiye"
+            result, detail = "invalid_key", "Azure requires both Base URL and API key"
         else:
             try:
                 async with httpx.AsyncClient(timeout=10) as client:
@@ -325,7 +327,7 @@ async def test_connection(
                 result, detail = "provider_down", str(e)[:120]
     elif provider in PROVIDER_TESTS:
         if not key:
-            result, detail = "invalid_key", "API key nahi mili"
+            result, detail = "invalid_key", "API key not found"
         else:
             cfg = PROVIDER_TESTS[provider]
             url = cfg["url"].replace("{key}", key)
@@ -467,7 +469,7 @@ async def start_crawl(
         url = "https://" + url
     status = await knowledge_service.get_status(ctx.workspace.id)
     if status.get("state") in ("crawling", "processing", "reindexing"):
-        raise HTTPException(409, "Ek task pehle se chal raha hai — complete hone do.")
+        raise HTTPException(409, "A task is already running — please wait for it to complete.")
 
     background.add_task(knowledge_service.crawl_website, ctx.workspace.id, url, payload.max_pages)
     await _audit(db, ctx.workspace.id, ctx.user.id, "kb_crawl_started", {"url": url, "max_pages": payload.max_pages})
@@ -486,10 +488,10 @@ async def upload_knowledge_file(
         raise HTTPException(400, f"Sirf {', '.join(allowed)} files supported hain.")
     content = await file.read()
     if len(content) > 20 * 1024 * 1024:
-        raise HTTPException(400, "File 20 MB se badi hai.")
+        raise HTTPException(400, "File is larger than 20 MB.")
     status = await knowledge_service.get_status(ctx.workspace.id)
     if status.get("state") in ("crawling", "processing", "reindexing"):
-        raise HTTPException(409, "Ek task pehle se chal raha hai — complete hone do.")
+        raise HTTPException(409, "A task is already running — please wait for it to complete.")
 
     background.add_task(knowledge_service.process_upload, ctx.workspace.id, file.filename, content)
     await _audit(db, ctx.workspace.id, ctx.user.id, "kb_file_uploaded", {"filename": file.filename, "size": len(content)})
@@ -514,7 +516,7 @@ async def reindex_knowledge(
 ):
     status = await knowledge_service.get_status(ctx.workspace.id)
     if status.get("state") in ("crawling", "processing", "reindexing"):
-        raise HTTPException(409, "Ek task pehle se chal raha hai.")
+        raise HTTPException(409, "A task is already running.")
     background.add_task(knowledge_service.reindex_all, ctx.workspace.id)
     await _audit(db, ctx.workspace.id, ctx.user.id, "kb_reindex_started", {})
     return {"ok": True, "message": "Reindex started"}
@@ -539,11 +541,35 @@ async def delete_all_knowledge(
 async def get_defaults(
     ctx: WorkspaceContext = Depends(require_permission("workspace.manage")),
 ):
+    from app.services.ai_tools import IMPLEMENTED_TOOLS
+
     return {
         "error_responses": DEFAULT_ERROR_RESPONSES,
         "tools": DEFAULT_TOOLS,
         "security": DEFAULT_SECURITY,
+        "implemented_tools": list(IMPLEMENTED_TOOLS.keys()),  # these actually DO something when enabled
     }
+
+
+@router.get("/categories")
+async def get_categories(
+    ctx: WorkspaceContext = Depends(require_permission("workspace.manage")),
+):
+    """All 70 business categories + their recommended tools — powers
+    the category dropdown and the "recommended for your business"
+    highlighting in the Tools tab."""
+    from app.services.ai_categories import CATEGORY_CATALOG
+    from app.services.ai_tools import IMPLEMENTED_TOOLS
+
+    return [
+        {
+            "key": key,
+            "label": entry["label"],
+            "suggested_tools": entry["tools"],
+            "implemented_suggested_tools": [t for t in entry["tools"] if t in IMPLEMENTED_TOOLS],
+        }
+        for key, entry in CATEGORY_CATALOG.items()
+    ]
 
 
 @router.post("/memory/flush")

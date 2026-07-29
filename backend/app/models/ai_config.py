@@ -11,15 +11,17 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base, TenantMixin, TimestampMixin, UUIDMixin
 
 DEFAULT_ERROR_RESPONSES = {
-    "429": "Hum thodi der mein wapas aate hain — abhi bahut saare messages aa rahe hain. 🙏",
-    "timeout": "Sorry, response mein time lag raha hai. Thodi der baad try karein.",
-    "provider_down": "AI assistant abhi maintenance mein hai. Team jald hi aapse judegi.",
-    "network": "Network issue aa gaya. Kripya dobara message karein.",
-    "maintenance": "System maintenance chal raha hai. Jald wapas aayenge!",
-    "unknown": "Kuch galat ho gaya. Hamari team ko inform kar diya gaya hai.",
+    "429": "We'll be back shortly — a lot of messages are coming in right now. 🙏",
+    "timeout": "Sorry, the response is taking longer than expected. Please try again shortly.",
+    "provider_down": "The AI assistant is under maintenance right now. Our team will get back to you soon.",
+    "network": "We hit a network issue. Please send your message again.",
+    "maintenance": "System maintenance is in progress. We'll be back soon!",
+    "unknown": "Something went wrong. Our team has been notified.",
 }
 
 DEFAULT_TOOLS = {
+    "generate_itinerary_pdf": True,
+    "generate_quotation_pdf": True,
     "search_product": True,
     "search_customer": True,
     "search_orders": False,
@@ -27,7 +29,7 @@ DEFAULT_TOOLS = {
     "cancel_order": False,
     "refund": False,
     "payment_link": False,
-    "book_appointment": False,
+    "book_appointment": True,
     "crm_update": True,
     "webhook": False,
     "api_request": False,
@@ -72,6 +74,7 @@ class AiSettings(Base, UUIDMixin, TimestampMixin, TenantMixin):
 
     # Persona
     assistant_name: Mapped[str] = mapped_column(String(64), default="Assistant", nullable=False)
+    business_category: Mapped[str | None] = mapped_column(String(64))  # e.g. "travel_tourism" — see ai_categories.py
     system_prompt: Mapped[str] = mapped_column(Text, default="", nullable=False)
     language: Mapped[str] = mapped_column(String(32), default="Hinglish", nullable=False)
     tone: Mapped[str] = mapped_column(String(32), default="friendly", nullable=False)

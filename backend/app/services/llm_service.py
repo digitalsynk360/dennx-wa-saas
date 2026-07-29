@@ -75,10 +75,16 @@ def _resolve_credentials(s: AiSettings) -> tuple[str, str, str | None, str | Non
 
 
 def _persona_suffix(s: AiSettings) -> str:
+    category_hint = ""
+    if s.business_category:
+        from app.services.ai_categories import CATEGORY_CATALOG
+        cat = CATEGORY_CATALOG.get(s.business_category)
+        if cat:
+            category_hint = f" {cat['persona']}"
     return (
-        f"\n\nTumhara naam '{s.assistant_name}' hai. "
-        f"Language: {s.language}. Tone: {s.tone}. "
-        "WhatsApp ke liye chhote, clear replies do (2-4 sentences)."
+        f"\n\nYour name is '{s.assistant_name}'.{category_hint} "
+        f"Reply in: {s.language}. Tone: {s.tone}. "
+        "Keep WhatsApp replies short and clear (2-4 sentences), unless you are sending a document/PDF."
     )
 
 
@@ -105,7 +111,7 @@ async def _rag_context(db: AsyncSession, workspace_id: uuid.UUID, query: str) ->
         if not docs:
             return ""
         joined = "\n---\n".join(d.content[:800] for d in docs)
-        return f"\n\nBusiness knowledge (isse answer do, source mention mat karo):\n{joined}"
+        return f"\n\nBusiness knowledge (use this to answer, do not mention the source):\n{joined}"
     except Exception:
         return ""
 
@@ -124,8 +130,8 @@ def _classify_http(status_code: int, body: str) -> LlmError:
 
 async def _call_openai_compat(
     base: str, key: str | None, model: str, messages: list[dict], s: AiSettings,
-    extra_headers: dict | None = None,
-) -> tuple[str, int, int]:
+    extra_headers: dict | None = None, tools: list[dict] | None = None,
+) -> dict:
     headers = {"Content-Type": "application/json", **(extra_headers or {})}
     if key:
         headers["Authorization"] = f"Bearer {key}"
@@ -138,6 +144,9 @@ async def _call_openai_compat(
         "presence_penalty": s.presence_penalty,
         "max_tokens": s.max_tokens,
     }
+    if tools:
+        payload["tools"] = tools
+        payload["tool_choice"] = "auto"
     try:
         async with httpx.AsyncClient(timeout=s.timeout_s) as client:
             r = await client.post(f"{base}/chat/completions", json=payload, headers=headers)
@@ -149,14 +158,27 @@ async def _call_openai_compat(
         raise _classify_http(r.status_code, r.text)
     data = r.json()
     usage = data.get("usage", {})
-    return (
-        data["choices"][0]["message"]["content"] or "",
-        usage.get("prompt_tokens", 0),
-        usage.get("completion_tokens", 0),
-    )
+    msg = data["choices"][0]["message"]
+    tool_calls = None
+    if msg.get("tool_calls"):
+        import json as _json
+        tool_calls = [
+            {"id": tc["id"], "name": tc["function"]["name"], "arguments": _json.loads(tc["function"].get("arguments") or "{}")}
+            for tc in msg["tool_calls"]
+        ]
+    return {
+        "text": msg.get("content") or "",
+        "tool_calls": tool_calls,
+        "assistant_message": msg,
+        "tokens_in": usage.get("prompt_tokens", 0),
+        "tokens_out": usage.get("completion_tokens", 0),
+    }
 
 
-async def _call_anthropic(key: str, model: str, system: str, messages: list[dict], s: AiSettings) -> tuple[str, int, int]:
+async def _call_anthropic(
+    key: str, model: str, system: str, messages: list[dict], s: AiSettings,
+    tools: list[dict] | None = None,
+) -> dict:
     payload = {
         "model": model,
         "system": system,
@@ -165,6 +187,11 @@ async def _call_anthropic(key: str, model: str, system: str, messages: list[dict
         "top_p": s.top_p,
         "max_tokens": s.max_tokens,
     }
+    if tools:
+        payload["tools"] = [
+            {"name": t["function"]["name"], "description": t["function"]["description"], "input_schema": t["function"]["parameters"]}
+            for t in tools
+        ]
     try:
         async with httpx.AsyncClient(timeout=s.timeout_s) as client:
             r = await client.post(
@@ -179,11 +206,22 @@ async def _call_anthropic(key: str, model: str, system: str, messages: list[dict
         raise _classify_http(r.status_code, r.text)
     data = r.json()
     usage = data.get("usage", {})
-    text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
-    return text, usage.get("input_tokens", 0), usage.get("output_tokens", 0)
+    content_blocks = data.get("content", [])
+    text = "".join(b.get("text", "") for b in content_blocks if b.get("type") == "text")
+    tool_calls = [
+        {"id": b["id"], "name": b["name"], "arguments": b.get("input", {})}
+        for b in content_blocks if b.get("type") == "tool_use"
+    ] or None
+    return {
+        "text": text,
+        "tool_calls": tool_calls,
+        "assistant_message": {"role": "assistant", "content": content_blocks},
+        "tokens_in": usage.get("input_tokens", 0),
+        "tokens_out": usage.get("output_tokens", 0),
+    }
 
 
-async def _call_gemini(key: str, model: str, system: str, messages: list[dict], s: AiSettings) -> tuple[str, int, int]:
+async def _call_gemini(key: str, model: str, system: str, messages: list[dict], s: AiSettings) -> dict:
     contents = [
         {"role": "user" if m["role"] == "user" else "model", "parts": [{"text": m["content"]}]}
         for m in messages
@@ -211,22 +249,24 @@ async def _call_gemini(key: str, model: str, system: str, messages: list[dict], 
         text = data["candidates"][0]["content"]["parts"][0]["text"]
     except (KeyError, IndexError):
         text = ""
-    return text, usage.get("promptTokenCount", 0), usage.get("candidatesTokenCount", 0)
+    return {"text": text, "tool_calls": None, "assistant_message": None,
+            "tokens_in": usage.get("promptTokenCount", 0), "tokens_out": usage.get("candidatesTokenCount", 0)}
 
 
 async def _dispatch(provider: str, key: str | None, base_url: str | None,
-                    model: str, system: str, history: list[dict], s: AiSettings) -> tuple[str, int, int]:
+                    model: str, system: str, history: list[dict], s: AiSettings,
+                    tools: list[dict] | None = None) -> dict:
     if provider in ("anthropic", "claude"):
         if not key:
             raise LlmError("provider_down", "no api key")
-        return await _call_anthropic(key, model, system, history, s)
+        return await _call_anthropic(key, model, system, history, s, tools)
     if provider == "gemini":
         if not key:
             raise LlmError("provider_down", "no api key")
         return await _call_gemini(key, model, system, history, s)
     if provider == "ollama":
         base = (base_url or "http://localhost:11434").rstrip("/") + "/v1"
-        return await _call_openai_compat(base, None, model, [{"role": "system", "content": system}, *history], s)
+        return await _call_openai_compat(base, None, model, [{"role": "system", "content": system}, *history], s, tools=tools)
     if provider == "azure":
         if not base_url or not key:
             raise LlmError("provider_down", "azure needs base_url + key")
@@ -248,16 +288,16 @@ async def _dispatch(provider: str, key: str | None, base_url: str | None,
             raise _classify_http(r.status_code, r.text)
         data = r.json()
         usage = data.get("usage", {})
-        return data["choices"][0]["message"]["content"] or "", usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0)
+        return {"text": data["choices"][0]["message"]["content"] or "", "tool_calls": None, "assistant_message": None,
+                "tokens_in": usage.get("prompt_tokens", 0), "tokens_out": usage.get("completion_tokens", 0)}
 
-    # OpenAI-compatible family
     base = OPENAI_COMPAT_BASES.get(provider)
     if base is None:
         raise LlmError("provider_down", f"unknown provider {provider}")
     if not key:
         raise LlmError("provider_down", "no api key")
     extra = {"HTTP-Referer": "https://app.deenxconsultancy.com"} if provider == "openrouter" else None
-    return await _call_openai_compat(base, key, model, [{"role": "system", "content": system}, *history], s, extra)
+    return await _call_openai_compat(base, key, model, [{"role": "system", "content": system}, *history], s, extra, tools=tools)
 
 
 def _estimate_cost_micro(model: str, tin: int, tout: int) -> int:
@@ -268,51 +308,102 @@ def _estimate_cost_micro(model: str, tin: int, tout: int) -> int:
 
 # ─── Public entrypoint (called by webhook pipeline) ─────────────────────
 
+MAX_TOOL_ROUNDS = 3  # hard cap so a confused model can't loop forever
+
+
 async def generate_ai_reply(
     db: AsyncSession,
     workspace_id: uuid.UUID,
     conversation_id: uuid.UUID,
     user_message: str,
+    contact_id: uuid.UUID | None = None,
+    ctx: dict | None = None,
 ) -> str | None:
     """Returns reply text, a friendly error response, or None (AI off /
-    unconfigured → stay silent so humans can pick up)."""
+    unconfigured -> stay silent so humans can pick up).
+
+    contact_id + ctx (token/phone_number_id/to) are optional -- without
+    them the AI still replies normally, it just can't use tools that
+    need to send a document or write to CRM. The webhook pipeline
+    always provides both."""
     s = await _load_settings(db, workspace_id)
     if s is None or not s.enabled:
         return None
 
     provider, model, key, base_url = _resolve_credentials(s)
     if provider != "ollama" and not key:
-        return None  # not configured — silence, no error spam to customers
+        return None
 
     err_responses = {**DEFAULT_ERROR_RESPONSES, **(s.error_responses or {})}
 
-    system = (s.system_prompt or "Tum ek helpful business assistant ho.") + _persona_suffix(s)
+    system = (s.system_prompt or "You are a helpful business assistant.") + _persona_suffix(s)
     system += await _rag_context(db, workspace_id, user_message)
 
     history = await _build_memory(db, conversation_id, s.memory_window)
     if not history or history[-1].get("content") != user_message:
         history.append({"role": "user", "content": user_message})
-    # providers need alternating roles starting with user
     while history and history[0]["role"] != "user":
         history.pop(0)
 
+    from app.services import ai_tools
+    enabled_tools = set((s.tools or {}).keys()) if s.tools else set()
+    if s.business_category:
+        from app.services.ai_categories import CATEGORY_CATALOG
+        cat = CATEGORY_CATALOG.get(s.business_category)
+        if cat:
+            enabled_tools |= {k for k in cat["tools"] if (s.tools or {}).get(k, True)}
+    tool_schemas = ai_tools.build_active_tool_schemas(enabled_tools) if (contact_id and ctx) else []
+
+    total_tin = total_tout = 0
     t0 = time.monotonic()
     try:
-        text, tin, tout = await _dispatch(provider, key, base_url, model, system, history, s)
+        for round_num in range(MAX_TOOL_ROUNDS):
+            result = await _dispatch(provider, key, base_url, model, system, history, s, tools=tool_schemas or None)
+            total_tin += result["tokens_in"]
+            total_tout += result["tokens_out"]
+
+            if not result.get("tool_calls"):
+                text = (result.get("text") or "").strip()
+                latency = int((time.monotonic() - t0) * 1000)
+                db.add(AiUsageLog(
+                    workspace_id=workspace_id, provider=provider, model=model,
+                    input_tokens=total_tin, output_tokens=total_tout,
+                    cost_micro_usd=_estimate_cost_micro(model, total_tin, total_tout),
+                    latency_ms=latency, success=True, source="chat",
+                ))
+                await db.flush()
+                return text or None
+
+            for tc in result["tool_calls"]:
+                tool_result_text = await ai_tools.execute_tool(
+                    tc["name"], tc["arguments"], db, workspace_id, conversation_id, contact_id, ctx or {},
+                )
+                if provider in ("anthropic", "claude"):
+                    history.append(result["assistant_message"])
+                    history.append({"role": "user", "content": [
+                        {"type": "tool_result", "tool_use_id": tc["id"], "content": tool_result_text}
+                    ]})
+                else:
+                    history.append(result["assistant_message"])
+                    history.append({"role": "tool", "tool_call_id": tc["id"], "content": tool_result_text})
+
+            if round_num >= MAX_TOOL_ROUNDS - 2:
+                tool_schemas = []
+
         latency = int((time.monotonic() - t0) * 1000)
         db.add(AiUsageLog(
             workspace_id=workspace_id, provider=provider, model=model,
-            input_tokens=tin, output_tokens=tout,
-            cost_micro_usd=_estimate_cost_micro(model, tin, tout),
+            input_tokens=total_tin, output_tokens=total_tout,
+            cost_micro_usd=_estimate_cost_micro(model, total_tin, total_tout),
             latency_ms=latency, success=True, source="chat",
         ))
         await db.flush()
-        return text.strip() or None
+        return err_responses.get("unknown")
     except LlmError as e:
         latency = int((time.monotonic() - t0) * 1000)
         db.add(AiUsageLog(
             workspace_id=workspace_id, provider=provider, model=model,
-            input_tokens=0, output_tokens=0, cost_micro_usd=0,
+            input_tokens=total_tin, output_tokens=total_tout, cost_micro_usd=0,
             latency_ms=latency, success=False, source="chat",
         ))
         await db.flush()

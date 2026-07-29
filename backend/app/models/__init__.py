@@ -18,6 +18,7 @@ from app.models.template import Template
 from app.models.campaign import Campaign, CampaignRecipient
 from app.models.automation import Automation, ChatbotFlow, ChatbotRule, FlowSession
 from app.models.crm import CRMLead, CRMTask, Ticket
+from app.models.catalogue import Product, ProductCategory
 from app.models.billing import Invoice, Subscription
 from app.models.ai_config import AiAuditLog, AiSettings, AiUsageLog
 from app.models.lead import DemoRequest
@@ -47,6 +48,8 @@ __all__ = [
     "FlowSession",
     "Automation",
     "CRMLead",
+    "Product",
+    "ProductCategory",
     "CRMTask",
     "Ticket",
     "Subscription",
