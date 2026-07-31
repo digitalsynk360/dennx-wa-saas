@@ -158,20 +158,59 @@ TOOL_SCHEMAS: dict[str, dict] = {
 # ctx carries {"token", "phone_number_id", "to"} for tools that send
 # WhatsApp messages/documents directly.
 
+async def _find_day_photo(db, workspace_id, query: str) -> dict | None:
+    """Priority chain for sourcing a real photo for one day of an
+    itinerary:
+      1. Business's own uploaded photo library (best match by tag) —
+         most authentic, zero licensing concerns, business controls it.
+      2. Unsplash (licensed stock, with attribution) — used when the
+         business hasn't uploaded a matching photo of their own.
+      3. No photo — the template already handles this gracefully
+         (text-only day block), so this is a silent, safe fallback,
+         not an error.
+    """
+    from app.models.photo_library import BusinessPhoto
+
+    words = [w for w in query.lower().split() if len(w) > 2]
+    if words:
+        rows = (await db.execute(
+            select(BusinessPhoto).where(BusinessPhoto.workspace_id == workspace_id)
+        )).scalars().all()
+        for photo in rows:
+            tag_lower = photo.tag.lower()
+            if any(w in tag_lower for w in words):
+                return {"photo_bytes": photo.image_bytes, "attribution_text": None, "photographer_url": None}
+
+    from app.services.unsplash_service import search_destination_photo
+    return await search_destination_photo(query)
+
+
 async def _exec_generate_itinerary_pdf(db, workspace_id, conversation_id, contact_id, ctx, **args) -> str:
-    from app.services.pdf_documents import build_itinerary_pdf
+    from app.services.pdf_documents_premium import build_itinerary_pdf_premium
     from app.services.conversation_service import send_whatsapp_document
     from app.models.whatsapp import WhatsAppAccount
 
     account = (await db.execute(select(WhatsAppAccount).where(WhatsAppAccount.workspace_id == workspace_id))).scalar_one_or_none()
     business_name = account.verified_business_name if account and account.verified_business_name else "Us"
 
-    pdf_bytes = build_itinerary_pdf(
+    # One real photo per day -- business's own library first, then
+    # Unsplash, then none. See _find_day_photo for the full chain.
+    day_photos: dict[int, dict] = {}
+    photo_sources = {"library": 0, "unsplash": 0}
+    for day in args["days"]:
+        query = f"{args['destination']} {day.get('title', '')}".strip()
+        result = await _find_day_photo(db, workspace_id, query)
+        if result:
+            day_photos[day["day_number"]] = result
+            photo_sources["library" if result.get("attribution_text") is None else "unsplash"] += 1
+
+    pdf_bytes = build_itinerary_pdf_premium(
         business_name=business_name,
         destination=args["destination"],
         duration_label=args["duration_label"],
         days=args["days"],
         budget_note=args.get("budget_note"),
+        day_photos=day_photos or None,
     )
     filename = f"Itinerary_{args['destination'].split(',')[0].strip().replace(' ', '_')}.pdf"
     await send_whatsapp_document(
@@ -179,7 +218,16 @@ async def _exec_generate_itinerary_pdf(db, workspace_id, conversation_id, contac
         file_bytes=pdf_bytes, filename=filename,
         caption=f"Your {args['duration_label']} {args['destination']} itinerary 🧳",
     )
-    return f"Itinerary PDF for {args['destination']} ({args['duration_label']}) was generated and sent to the customer on WhatsApp successfully."
+    if day_photos:
+        parts = []
+        if photo_sources["library"]:
+            parts.append(f"{photo_sources['library']} from your own photo library")
+        if photo_sources["unsplash"]:
+            parts.append(f"{photo_sources['unsplash']} from Unsplash")
+        photo_note = f" with {len(day_photos)} real photo(s) ({', '.join(parts)})"
+    else:
+        photo_note = " (text-only, no matching photo found)"
+    return f"Itinerary PDF for {args['destination']} ({args['duration_label']}) was generated{photo_note} and sent to the customer on WhatsApp successfully."
 
 
 async def _exec_generate_quotation_pdf(db, workspace_id, conversation_id, contact_id, ctx, **args) -> str:

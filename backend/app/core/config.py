@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     META_EMBEDDED_SIGNUP_CONFIG_ID: str = ""
     META_GRAPH_API_VERSION: str = "v21.0"
 
+    # ---------- Unsplash (real destination photos for AI-generated itineraries) ----------
+    UNSPLASH_ACCESS_KEY: str = ""
+    UNSPLASH_APP_NAME: str = "dennx-wa-saas"  # used in attribution link UTM params
+
     # Phase 7 — campaign send pacing (Meta Cloud API throughput tiers)
     CAMPAIGN_SEND_RATE_PER_SECOND: int = 1
 

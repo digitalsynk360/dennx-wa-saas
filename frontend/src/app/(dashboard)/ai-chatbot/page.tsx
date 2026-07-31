@@ -118,7 +118,7 @@ const SECURITY_META: { key: string; label: string; desc: string }[] = [
 
 
 export default function AiChatbotPage() {
-  const [tab, setTab] = useState<"overview" | "provider" | "settings" | "knowledge" | "errors" | "tools" | "advanced" | "analytics">("overview");
+  const [tab, setTab] = useState<"overview" | "provider" | "settings" | "knowledge" | "photos" | "errors" | "tools" | "advanced" | "analytics">("overview");
   const [overview, setOverview] = useState<Overview | null>(null);
   const [s, setS] = useState<AiSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -146,6 +146,65 @@ export default function AiChatbotPage() {
   const [kbBusy, setKbBusy] = useState(false);
   const [qaTitle, setQaTitle] = useState("");
   const [qaContent, setQaContent] = useState("");
+
+  // Photo Library (Option 1 for AI itinerary tool photos)
+  const [photos, setPhotos] = useState<{ id: string; tag: string; filename: string; size_bytes: number; created_at: string }[]>([]);
+  const [photoTag, setPhotoTag] = useState("");
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+
+  const [photoBlobUrls, setPhotoBlobUrls] = useState<Record<string, string>>({});
+
+  const loadPhotos = useCallback(async () => {
+    try {
+      const { data } = await api.get<{ id: string; tag: string; filename: string; size_bytes: number; created_at: string }[]>("/ai-hub/photos");
+      setPhotos(data);
+      // <img> tags can't send Authorization headers, so fetch each
+      // thumbnail through the authenticated client and use a blob URL.
+      const entries = await Promise.all(
+        data.map(async (p) => {
+          try {
+            const res = await api.get(`/ai-hub/photos/${p.id}/image`, { responseType: "blob" });
+            return [p.id, URL.createObjectURL(res.data as Blob)] as const;
+          } catch {
+            return [p.id, ""] as const;
+          }
+        })
+      );
+      setPhotoBlobUrls(Object.fromEntries(entries));
+    } catch { /* non-critical */ }
+  }, []);
+  useEffect(() => { if (tab === "photos") loadPhotos(); }, [tab, loadPhotos]);
+
+  const uploadPhoto = async () => {
+    if (!photoTag.trim() || !photoFile) {
+      setError("Tag aur photo dono chahiye");
+      return;
+    }
+    setPhotoUploading(true); setError(null);
+    try {
+      const form = new FormData();
+      form.append("tag", photoTag.trim());
+      form.append("file", photoFile);
+      await api.post("/ai-hub/photos", form, { headers: { "Content-Type": "multipart/form-data" } });
+      setSuccess("Photo add ho gayi!");
+      setPhotoTag(""); setPhotoFile(null);
+      await loadPhotos();
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Upload failed"));
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
+
+  const deletePhoto = async (id: string) => {
+    if (!confirm("Yeh photo hatani hai?")) return;
+    try {
+      await api.delete(`/ai-hub/photos/${id}`);
+      await loadPhotos();
+    } catch { setError("Delete failed"); }
+  };
+
 
   const loadKb = useCallback(async () => {
     try {
@@ -374,7 +433,7 @@ export default function AiChatbotPage() {
 
         {/* Tabs */}
         <div className="mb-6 flex overflow-x-auto border-b border-border [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {([["overview", "Overview"], ["provider", "AI Provider"], ["settings", "AI Settings"], ["knowledge", "Knowledge Base"], ["errors", "Error Responses"], ["tools", "Tools"], ["advanced", "Memory & Security"], ["analytics", "Analytics"]] as const).map(([id, label]) => (
+          {([["overview", "Overview"], ["provider", "AI Provider"], ["settings", "AI Settings"], ["knowledge", "Knowledge Base"], ["photos", "Photo Library"], ["errors", "Error Responses"], ["tools", "Tools"], ["advanced", "Memory & Security"], ["analytics", "Analytics"]] as const).map(([id, label]) => (
             <button
               key={id}
               onClick={() => setTab(id)}
@@ -851,6 +910,56 @@ export default function AiChatbotPage() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        )}
+        {/* ═══ PHOTO LIBRARY (Option 1: business's own itinerary photos) ═══ */}
+        {tab === "photos" && (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-border bg-white p-5">
+              <p className="font-semibold">Photo Library</p>
+              <p className="mb-4 text-sm text-muted-foreground">
+                Apni khud ki destination/property photos upload karo — jab AI itinerary banayega, pehle yahan se matching photo dhundega
+                (tag se match karke), tabhi Unsplash try karega. Tag mein destination/jagah ka naam likho (jaise &quot;Kashmir Dal Lake Houseboat&quot;).
+              </p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <div className="flex-1 space-y-1.5">
+                  <Label>Tag (destination/jagah ka naam)</Label>
+                  <Input value={photoTag} onChange={(e) => setPhotoTag(e.target.value)} placeholder="Kashmir Dal Lake Houseboat" />
+                </div>
+                <div className="flex-1 space-y-1.5">
+                  <Label>Photo (JPG/PNG/WebP, max 8MB)</Label>
+                  <input
+                    type="file" accept="image/jpeg,image/png,image/webp"
+                    onChange={(e) => setPhotoFile(e.target.files?.[0] || null)}
+                    className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white"
+                  />
+                </div>
+                <Button onClick={uploadPhoto} disabled={photoUploading}>
+                  {photoUploading ? "Uploading..." : "Add Photo"}
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {photos.map((p) => (
+                <div key={p.id} className="overflow-hidden rounded-xl border border-border bg-white">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={photoBlobUrls[p.id] || ""} alt={p.tag} className="h-28 w-full bg-muted object-cover" />
+                  <div className="p-2.5">
+                    <p className="truncate text-xs font-semibold">{p.tag}</p>
+                    <div className="mt-1 flex items-center justify-between">
+                      <span className="text-[10px] text-muted-foreground">{(p.size_bytes / 1024).toFixed(0)} KB</span>
+                      <button onClick={() => deletePhoto(p.id)} className="text-[10px] font-medium text-red-500 hover:underline">Delete</button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {photos.length === 0 && (
+                <p className="col-span-full py-8 text-center text-sm text-muted-foreground">
+                  Koi photo abhi tak upload nahi hui — upar se add karo.
+                </p>
+              )}
             </div>
           </div>
         )}

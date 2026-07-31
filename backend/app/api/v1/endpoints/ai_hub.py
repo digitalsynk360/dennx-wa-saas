@@ -666,3 +666,90 @@ async def ai_analytics(
         "top_models": top_models,
         "top_sources": top_sources,
     }
+
+# ─── Business Photo Library (Option 1: business-uploaded photos) ────
+
+from fastapi import Form
+from fastapi.responses import Response
+
+
+@router.get("/photos")
+async def list_photos(
+    ctx: WorkspaceContext = Depends(require_permission("workspace.manage")),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.photo_library import BusinessPhoto
+
+    rows = (await db.execute(
+        select(BusinessPhoto)
+        .where(BusinessPhoto.workspace_id == ctx.workspace.id)
+        .order_by(BusinessPhoto.created_at.desc())
+    )).scalars().all()
+    return [
+        {"id": str(p.id), "tag": p.tag, "filename": p.filename, "size_bytes": p.size_bytes, "created_at": p.created_at.isoformat()}
+        for p in rows
+    ]
+
+
+@router.get("/photos/{photo_id}/image")
+async def get_photo_image(
+    photo_id: uuid.UUID,
+    ctx: WorkspaceContext = Depends(require_permission("workspace.manage")),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.photo_library import BusinessPhoto
+
+    photo = (await db.execute(
+        select(BusinessPhoto).where(BusinessPhoto.id == photo_id, BusinessPhoto.workspace_id == ctx.workspace.id)
+    )).scalar_one_or_none()
+    if photo is None:
+        raise HTTPException(404, "Photo not found.")
+    return Response(content=photo.image_bytes, media_type=photo.content_type)
+
+
+@router.post("/photos", status_code=201)
+async def upload_photo(
+    tag: str = Form(...),
+    file: UploadFile = File(...),
+    ctx: WorkspaceContext = Depends(require_permission("workspace.manage")),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.photo_library import BusinessPhoto
+
+    allowed = (".jpg", ".jpeg", ".png", ".webp")
+    if not file.filename or not file.filename.lower().endswith(allowed):
+        raise HTTPException(400, f"Only {', '.join(allowed)} files supported.")
+    content = await file.read()
+    if len(content) > 8 * 1024 * 1024:
+        raise HTTPException(400, "Photo is larger than 8 MB.")
+    if not tag.strip():
+        raise HTTPException(400, "A tag (e.g. destination name) is required.")
+
+    content_type = "image/png" if file.filename.lower().endswith(".png") else (
+        "image/webp" if file.filename.lower().endswith(".webp") else "image/jpeg"
+    )
+    photo = BusinessPhoto(
+        workspace_id=ctx.workspace.id, tag=tag.strip(), filename=file.filename,
+        content_type=content_type, image_bytes=content, size_bytes=len(content),
+    )
+    db.add(photo)
+    await db.flush()
+    return {"id": str(photo.id), "tag": photo.tag, "filename": photo.filename, "size_bytes": photo.size_bytes}
+
+
+@router.delete("/photos/{photo_id}")
+async def delete_photo(
+    photo_id: uuid.UUID,
+    ctx: WorkspaceContext = Depends(require_permission("workspace.manage")),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.photo_library import BusinessPhoto
+
+    photo = (await db.execute(
+        select(BusinessPhoto).where(BusinessPhoto.id == photo_id, BusinessPhoto.workspace_id == ctx.workspace.id)
+    )).scalar_one_or_none()
+    if photo is None:
+        raise HTTPException(404, "Photo not found.")
+    await db.delete(photo)
+    await db.flush()
+    return {"ok": True}

@@ -22,6 +22,7 @@ from app.models.catalogue import Product, ProductCategory
 from app.models.billing import Invoice, Subscription
 from app.models.ai_config import AiAuditLog, AiSettings, AiUsageLog
 from app.models.lead import DemoRequest
+from app.models.photo_library import BusinessPhoto
 from app.models.platform import AuditLog, KnowledgeDocument, OutboundWebhook, PlatformAuditLog
 from app.models.api_key import ApiKey
 from app.models.flow_builder import ExecutionLog, FlowExecution, FlowVersion
@@ -56,6 +57,7 @@ __all__ = [
     "Invoice",
     "AuditLog",
     "DemoRequest",
+    "BusinessPhoto",
     "PlatformAuditLog",
     "OutboundWebhook",
     "KnowledgeDocument",
