@@ -105,7 +105,7 @@ export default function ChatbotPage() {
         {error && <Alert variant="destructive" className="mb-4">{error}</Alert>}
 
         {rules.length === 0 ? (
-          <div className="rounded-lg border border-border bg-white p-12 text-center">
+          <div className="rounded-lg border border-border bg-card p-12 text-center">
             <Bot className="mx-auto mb-3 h-12 w-12 text-muted-foreground" />
             <p className="font-medium">No rules yet</p>
             <p className="text-sm text-muted-foreground">
@@ -117,7 +117,7 @@ export default function ChatbotPage() {
             {rules.map((rule) => (
               <div
                 key={rule.id}
-                className="flex items-center gap-3 rounded-lg border border-border bg-white p-4"
+                className="flex items-center gap-3 rounded-lg border border-border bg-card p-4"
               >
                 <GripVertical className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">

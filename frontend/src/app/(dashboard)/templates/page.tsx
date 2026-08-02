@@ -122,7 +122,7 @@ export default function TemplatesPage() {
   const handleSubmit = async (id: string) => {
     try { await api.post(`/templates/${id}/submit`); setSuccess("Submitted to Meta for approval"); await load(); }
     catch (e: unknown) {
-      setError(getErrorMessage(e, "Submit failed — WhatsApp account connected hai?"));
+      setError(getErrorMessage(e, "Submit failed — is your WhatsApp account connected?"));
     }
   };
 
@@ -176,7 +176,7 @@ export default function TemplatesPage() {
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
     if (file && file.size > 5 * 1024 * 1024) {
-      setError("File 5 MB se badi hai.");
+      setError("File is larger than 5 MB.");
       return;
     }
     setC((s) => ({ ...s, headerFile: file }));
@@ -218,15 +218,15 @@ export default function TemplatesPage() {
         variable_samples: {},
       });
       if (created.status === "rejected") {
-        setError(`Meta ne reject kiya: ${created.rejection_reason || "Unknown reason"}`);
+        setError(`Meta rejected this template: ${created.rejection_reason || "Unknown reason"}`);
       } else {
-        setSuccess("Template Meta ko submit ho gaya — approval ka wait karo!");
+        setSuccess("Template submitted to Meta — awaiting approval!");
       }
       setCreatorOpen(false);
       setC({ ...EMPTY_CREATOR });
       await load();
     } catch (e: unknown) {
-      setError(getErrorMessage(e, "Create failed — name unique hona chahiye."));
+      setError(getErrorMessage(e, "Create failed — the name must be unique."));
     } finally { setSaving(false); }
   };
 
@@ -265,7 +265,7 @@ export default function TemplatesPage() {
           </div>
         </div>
 
-        <div className="rounded-lg border border-border bg-white">
+        <div className="rounded-lg border border-border bg-card">
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
               <thead className="border-b border-border text-xs uppercase text-muted-foreground">
@@ -305,7 +305,7 @@ export default function TemplatesPage() {
                         {(t.status === "draft" || (t.status === "rejected" && !t.meta_template_id)) && (() => {
                           const needsMedia = ["image", "video", "document"].includes(t.header_type || "") && !t.header_media_id;
                           return needsMedia ? (
-                            <span className="flex items-center gap-1 text-xs text-red-600" title="Header sample missing — delete karke naya banao, sample file upload karke.">
+                            <span className="flex items-center gap-1 text-xs text-red-600" title="Header sample missing — delete this and create a new one, uploading a sample file.">
                               <AlertTriangle className="h-3.5 w-3.5" /> Sample missing
                             </span>
                           ) : (
@@ -336,11 +336,11 @@ export default function TemplatesPage() {
 
       {creatorOpen && (
         <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/50 p-0 sm:items-center sm:p-4">
-          <div className="flex h-full w-full flex-col overflow-hidden bg-white sm:h-[92vh] sm:max-w-6xl sm:rounded-2xl sm:shadow-2xl">
+          <div className="flex h-full w-full flex-col overflow-hidden bg-card sm:h-[92vh] sm:max-w-6xl sm:rounded-2xl sm:shadow-2xl">
             <div className="flex flex-shrink-0 items-center justify-between border-b border-border px-5 py-3.5">
               <div>
                 <h2 className="text-lg font-semibold">Create WhatsApp Template</h2>
-                <p className="text-xs text-muted-foreground">Meta approval ke liye template banao</p>
+                <p className="text-xs text-muted-foreground">Create a template for Meta approval</p>
               </div>
               <button onClick={() => setCreatorOpen(false)} className="rounded-lg p-2 hover:bg-muted">
                 <X className="h-5 w-5" />
@@ -370,13 +370,13 @@ export default function TemplatesPage() {
                   <button
                     type="button"
                     onClick={() => setLangOpen((v) => !v)}
-                    className="flex h-10 w-full items-center justify-between rounded-md border border-border bg-white px-3 text-sm"
+                    className="flex h-10 w-full items-center justify-between rounded-md border border-border bg-card px-3 text-sm"
                   >
                     <span>{selectedLang?.label || c.language}</span>
                     <Search className="h-4 w-4 text-muted-foreground" />
                   </button>
                   {langOpen && (
-                    <div className="absolute z-20 mt-1 w-full rounded-lg border border-border bg-white shadow-lg">
+                    <div className="absolute z-20 mt-1 w-full rounded-lg border border-border bg-card shadow-lg">
                       <div className="border-b border-border p-2">
                         <Input
                           autoFocus
@@ -485,7 +485,7 @@ export default function TemplatesPage() {
                           key={v}
                           type="button"
                           onClick={() => insertVar(v)}
-                          className="rounded-md border border-border bg-white px-2 py-0.5 font-mono text-xs hover:border-primary hover:text-primary"
+                          className="rounded-md border border-border bg-card px-2 py-0.5 font-mono text-xs hover:border-primary hover:text-primary"
                         >
                           +{v}
                         </button>
@@ -533,7 +533,7 @@ export default function TemplatesPage() {
                   </div>
                   {c.buttons.map((b, i) => (
                     <div key={i} className="flex items-start gap-2 rounded-lg border border-border bg-muted/30 p-2">
-                      <span className="mt-2 whitespace-nowrap rounded border border-border bg-white px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                      <span className="mt-2 whitespace-nowrap rounded border border-border bg-card px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
                         {b.type === "QUICK_REPLY" ? "Quick Reply" : b.type === "URL" ? "URL" : "Call"}
                       </span>
                       <div className="flex-1 space-y-1.5">
@@ -573,7 +573,7 @@ export default function TemplatesPage() {
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Live Preview</p>
 
                 <div className="rounded-2xl p-3" style={{ backgroundColor: "hsl(90,25%,90%)" }}>
-                  <div className="max-w-[95%] rounded-lg rounded-tl-none bg-white p-2.5 shadow-sm">
+                  <div className="max-w-[95%] rounded-lg rounded-tl-none bg-card p-2.5 shadow-sm">
                     {c.headerType === "text" && c.headerText && (
                       <p className="mb-1 text-sm font-bold">{c.headerText}</p>
                     )}
@@ -600,7 +600,7 @@ export default function TemplatesPage() {
                     )}
                     <div
                       className="whitespace-pre-wrap break-words text-sm text-gray-800"
-                      dangerouslySetInnerHTML={{ __html: c.body ? fmt(c.body) : '<span style="color:#9ca3af">Body text yahan dikhega...</span>' }}
+                      dangerouslySetInnerHTML={{ __html: c.body ? fmt(c.body) : '<span style="color:#9ca3af">Body text will appear here…</span>' }}
                     />
                     {c.footer && <p className="mt-1 text-xs text-gray-400">{c.footer}</p>}
                     <p className="mt-0.5 text-right text-[10px] text-gray-400">
@@ -610,7 +610,7 @@ export default function TemplatesPage() {
                   {c.buttons.length > 0 && (
                     <div className="mt-1 max-w-[95%] space-y-1">
                       {c.buttons.map((b, i) => (
-                        <div key={i} className="flex items-center justify-center gap-1.5 rounded-lg bg-white py-2 text-center text-sm font-medium text-sky-600 shadow-sm">
+                        <div key={i} className="flex items-center justify-center gap-1.5 rounded-lg bg-card py-2 text-center text-sm font-medium text-sky-600 shadow-sm">
                           {b.type === "URL" && <Link2 className="h-3.5 w-3.5" />}
                           {b.type === "PHONE_NUMBER" && <Phone className="h-3.5 w-3.5" />}
                           {b.text || "Button"}
@@ -624,7 +624,7 @@ export default function TemplatesPage() {
                   <p className="text-[11px] text-muted-foreground">Variables detected: {bodyVars.join(", ")}</p>
                 )}
 
-                <div className="rounded-xl border border-border bg-white p-3">
+                <div className="rounded-xl border border-border bg-card p-3">
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Checklist</p>
                   <div className="space-y-1">
                     {checklist.map((item) => (

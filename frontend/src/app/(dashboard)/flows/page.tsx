@@ -85,7 +85,7 @@ export default function FlowsPage() {
         {error && <Alert variant="destructive" className="mb-4">{error}</Alert>}
 
         {flows.length === 0 ? (
-          <div className="rounded-lg border border-border bg-white p-12 text-center">
+          <div className="rounded-lg border border-border bg-card p-12 text-center">
             <GitBranch className="mx-auto mb-3 h-12 w-12 text-muted-foreground" />
             <p className="font-medium">No flows yet</p>
             <p className="text-sm text-muted-foreground">Create a flow to build multi-step automated conversations</p>
@@ -93,7 +93,7 @@ export default function FlowsPage() {
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {flows.map((flow) => (
-              <div key={flow.id} className="rounded-lg border border-border bg-white p-4">
+              <div key={flow.id} className="rounded-lg border border-border bg-card p-4">
                 <div className="flex items-start justify-between">
                   <div className="min-w-0">
                     <Link href={`/flows/${flow.id}`} className="font-medium hover:underline truncate block">{flow.name}</Link>
@@ -123,7 +123,7 @@ export default function FlowsPage() {
       {/* Analytics Modal */}
       {analyticsFlow && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="relative w-full max-w-2xl rounded-2xl bg-white shadow-2xl">
+          <div className="relative w-full max-w-2xl rounded-2xl bg-card shadow-2xl">
             <div className="flex items-center justify-between border-b border-border px-5 py-4">
               <div>
                 <p className="font-semibold">{analyticsFlow.name}</p>
@@ -162,7 +162,7 @@ export default function FlowsPage() {
                   </ResponsiveContainer>
                 </>
               ) : (
-                <p className="py-10 text-center text-muted-foreground">No analytics data yet — flow run karo.</p>
+                <p className="py-10 text-center text-muted-foreground">No analytics data yet — run a flow to see results.</p>
               )}
             </div>
           </div>

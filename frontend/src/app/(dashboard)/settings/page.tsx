@@ -25,7 +25,7 @@ export default function SettingsPage() {
     <>
       <Topbar title="Settings" />
       <div className="p-4 sm:p-6">
-        {/* Scrollable tab bar — mobile pe overflow nahi hota */}
+        {/* Scrollable tab bar — prevents overflow on mobile */}
         <div className="mb-6 flex overflow-x-auto border-b border-border [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {TABS.map((tab) => (
             <button

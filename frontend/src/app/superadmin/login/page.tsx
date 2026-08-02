@@ -35,7 +35,7 @@ export default function SuperAdminLoginPage() {
       const { data: me } = await api.get<MeResponse>("/auth/me");
       if (!me.user.is_superuser) {
         clearTokens();
-        setError("Access denied — yeh account superadmin nahi hai.");
+        setError("Access denied — this account is not a superadmin.");
         setLoading(false);
         return;
       }

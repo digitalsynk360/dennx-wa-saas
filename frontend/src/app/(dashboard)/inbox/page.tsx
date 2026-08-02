@@ -336,7 +336,7 @@ export default function InboxPage() {
         {/* ── Conversation list ── */}
         <div
           className={cn(
-            "w-full flex-col border-r border-border bg-white md:flex md:w-80 md:flex-shrink-0",
+            "w-full flex-col border-r border-border bg-card md:flex md:w-80 md:flex-shrink-0",
             selectedId ? "hidden" : "flex"
           )}
         >
@@ -433,7 +433,7 @@ export default function InboxPage() {
         {selectedConv ? (
           <div className="flex flex-1 flex-col min-w-0">
             {/* Chat header */}
-            <div className="flex flex-col gap-2 border-b border-border bg-white px-3 sm:px-4 py-2.5 sm:py-3 flex-shrink-0 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-2 border-b border-border bg-card px-3 sm:px-4 py-2.5 sm:py-3 flex-shrink-0 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-center gap-1.5">
                 <button
                   onClick={() => setSelectedId(null)}
@@ -521,7 +521,7 @@ export default function InboxPage() {
                       "max-w-[70%] rounded-lg px-3 py-2 text-sm shadow-sm",
                       msg.direction === "outbound"
                         ? "bg-[#d9fdd3] text-foreground"
-                        : "bg-white text-foreground"
+                        : "bg-card text-foreground"
                     )}
                   >
                     {/* Bot label */}
@@ -551,13 +551,13 @@ export default function InboxPage() {
 
             {/* Message input */}
             {selectedConv.status === "resolved" ? (
-              <div className="border-t border-border bg-white p-3 text-center text-sm text-muted-foreground">
+              <div className="border-t border-border bg-card p-3 text-center text-sm text-muted-foreground">
                 Conversation resolved. Send a template to re-engage.
               </div>
             ) : (
-              <div className="relative border-t border-border bg-white flex-shrink-0">
+              <div className="relative border-t border-border bg-card flex-shrink-0">
                 {qrOpen && (
-                  <div className="absolute bottom-full left-2 right-2 z-20 mb-1 max-h-56 overflow-y-auto rounded-xl border border-border bg-white p-2 shadow-lg sm:left-3 sm:right-auto sm:w-80">
+                  <div className="absolute bottom-full left-2 right-2 z-20 mb-1 max-h-56 overflow-y-auto rounded-xl border border-border bg-card p-2 shadow-lg sm:left-3 sm:right-auto sm:w-80">
                     <div className="mb-1.5 flex items-center justify-between px-1">
                       <p className="text-xs font-semibold text-muted-foreground">Quick Replies</p>
                       <button
@@ -571,7 +571,7 @@ export default function InboxPage() {
                     </div>
                     {quickReplies.length === 0 ? (
                       <p className="px-1 pb-1 text-xs text-muted-foreground">
-                        Koi quick reply nahi. Message likho aur &quot;Save current&quot; dabao.
+                        No quick replies yet. Type a message and press &quot;Save current&quot;.
                       </p>
                     ) : (
                       quickReplies.map((qr, i) => (
@@ -646,7 +646,7 @@ export default function InboxPage() {
 
         {/* ── Right panel — Contact info ── */}
         {selectedConv && (
-          <div className="hidden w-64 flex-shrink-0 border-l border-border bg-white p-4 lg:block overflow-y-auto">
+          <div className="hidden w-64 flex-shrink-0 border-l border-border bg-card p-4 lg:block overflow-y-auto">
             <h3 className="font-semibold text-sm mb-3">Conversation Info</h3>
 
             {/* ── Contact Tags ── */}
@@ -689,7 +689,7 @@ export default function InboxPage() {
                         <button
                           key={t.id}
                           onClick={() => attachTag(t.id)}
-                          className="rounded-full border border-border bg-white px-2 py-0.5 text-xs hover:border-primary hover:text-primary"
+                          className="rounded-full border border-border bg-card px-2 py-0.5 text-xs hover:border-primary hover:text-primary"
                         >
                           + {t.name}
                         </button>
@@ -761,7 +761,7 @@ export default function InboxPage() {
       {/* ── Assign Agent Modal ── */}
       {assignOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-xl shadow-xl w-96 max-h-[80vh] flex flex-col">
+          <div className="bg-card rounded-xl shadow-xl w-96 max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">
               <h2 className="font-semibold">Assign Agent</h2>
               <button

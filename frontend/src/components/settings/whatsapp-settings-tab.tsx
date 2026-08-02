@@ -72,7 +72,7 @@ export function WhatsAppSettingsTab() {
       const { data } = await api.get<WhatsAppAccountResponse | null>("/whatsapp/account");
       setAccount(data);
     } catch {
-      setError("WhatsApp account load nahi hua");
+      setError("Couldn't load WhatsApp account.");
     } finally {
       setLoading(false);
     }
@@ -89,9 +89,9 @@ export function WhatsAppSettingsTab() {
         code, waba_id, phone_number_id,
       });
       setAccount(data);
-      setSuccess("WhatsApp connected! Turant use karne ke liye ready hai.");
+      setSuccess("WhatsApp connected! It's ready to use right away.");
     } catch (e: unknown) {
-      setError(getErrorMessage(e, "Connect complete nahi hua — dobara try karo"));
+      setError(getErrorMessage(e, "Couldn't complete the connection — please try again."));
     } finally {
       setConnecting(false);
       pending.current = {};
@@ -142,7 +142,7 @@ export function WhatsAppSettingsTab() {
         pending.current.phone_number_id = data.data?.phone_number_id;
         finishIfReady();
       } else if (data.event === "CANCEL") {
-        setError(data.data?.error_message || "Signup cancel ho gaya — dobara try karo.");
+        setError(data.data?.error_message || "Signup was cancelled — please try again.");
         setConnecting(false);
         pending.current = {};
       }
@@ -154,7 +154,7 @@ export function WhatsAppSettingsTab() {
   const launchSignup = () => {
     setError(null); setSuccess(null);
     if (!window.FB || !config?.config_id) {
-      setError("Facebook SDK abhi load ho raha hai — 2 second baad try karo.");
+      setError("Facebook SDK is still loading — please try again in a moment.");
       return;
     }
     setConnecting(true);
@@ -166,7 +166,7 @@ export function WhatsAppSettingsTab() {
           finishIfReady();
         } else {
           setConnecting(false);
-          setError("Facebook login cancel ho gaya ya complete nahi hua.");
+          setError("Facebook login was cancelled or didn't complete.");
         }
       },
       {
@@ -179,30 +179,30 @@ export function WhatsAppSettingsTab() {
   };
 
   const handleDisconnect = async () => {
-    if (!confirm("WhatsApp account disconnect karoge? Messaging turant ruk jaayegi.")) return;
+    if (!confirm("Disconnect this WhatsApp account? Messaging will stop immediately.")) return;
     try {
       await api.delete("/whatsapp/disconnect");
       setAccount(null);
       setSuccess("Disconnected.");
     } catch {
-      setError("Disconnect fail hua");
+      setError("Couldn't disconnect. Please try again.");
     }
   };
 
   const handleManualConnect = async () => {
     if (!manualForm.waba_id.trim() || !manualForm.phone_number_id.trim() || !manualForm.access_token.trim()) {
-      setError("WABA ID, Phone Number ID aur Access Token zaroori hain");
+      setError("WABA ID, Phone Number ID and Access Token are required.");
       return;
     }
     setSavingManual(true); setError(null);
     try {
       const { data } = await api.post<WhatsAppAccountResponse>("/whatsapp/connect", manualForm);
       setAccount(data);
-      setSuccess("WhatsApp manually connect ho gaya!");
+      setSuccess("WhatsApp connected manually!");
       setManualForm({ waba_id: "", phone_number_id: "", display_phone_number: "", business_name: "", access_token: "" });
       setShowManual(false);
     } catch (e: unknown) {
-      setError(getErrorMessage(e, "Manual connect fail hua"));
+      setError(getErrorMessage(e, "Manual connection failed."));
     } finally {
       setSavingManual(false);
     }
@@ -217,11 +217,11 @@ export function WhatsAppSettingsTab() {
       {error && <Alert variant="destructive" className="mb-4">{error}</Alert>}
       {success && <Alert variant="success" className="mb-4">{success}</Alert>}
 
-      <div className="rounded-xl border border-border bg-white p-5">
+      <div className="rounded-xl border border-border bg-card p-5 shadow-card">
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h2 className="font-semibold">WhatsApp Business API</h2>
-            <p className="text-sm text-muted-foreground">Meta ke saath ek-click mein connect karo</p>
+            <p className="text-sm text-muted-foreground">Connect with Meta in one click</p>
           </div>
           {account ? (
             <span className="flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
@@ -246,7 +246,7 @@ export function WhatsAppSettingsTab() {
 
         {!config?.configured ? (
           <Alert variant="destructive">
-            Meta Tech Provider app server pe configure nahi hai (META_APP_ID / META_APP_SECRET / META_EMBEDDED_SIGNUP_CONFIG_ID missing). Deploy se pehle .env.production mein set karo.
+            The Meta Tech Provider app isn&apos;t configured on the server (META_APP_ID / META_APP_SECRET / META_EMBEDDED_SIGNUP_CONFIG_ID missing). Set these in .env.production before deploying.
           </Alert>
         ) : (
           <>
@@ -261,7 +261,7 @@ export function WhatsAppSettingsTab() {
               {connecting ? "Connecting..." : account ? "Reconnect WhatsApp" : "Connect WhatsApp"}
             </button>
             <p className="mt-2 text-[10px] text-muted-foreground">
-              Facebook popup khulega — apna Business Portfolio, WABA aur phone number select/create karo. Access Token, WABA ID, Phone Number ID — kuch bhi manually daalne ki zarurat nahi.
+              A Facebook popup will open — select or create your Business Portfolio, WABA and phone number. There&apos;s no need to enter the Access Token, WABA ID or Phone Number ID manually.
             </p>
           </>
         )}
@@ -276,7 +276,7 @@ export function WhatsAppSettingsTab() {
       </div>
 
       {/* ── Manual fallback — for when Embedded Signup itself is unavailable ── */}
-      <div className="mt-6 rounded-lg border border-border bg-white p-5">
+      <div className="mt-6 rounded-xl border border-border bg-card p-5 shadow-card">
         <button
           type="button"
           onClick={() => setShowManual((s) => !s)}
@@ -285,7 +285,7 @@ export function WhatsAppSettingsTab() {
           <div>
             <h3 className="font-semibold">Advanced: Manual Setup</h3>
             <p className="text-sm text-muted-foreground">
-              Agar &quot;Connect WhatsApp&quot; kaam na kare (Meta app abhi Development mode mein ho ya verification pending ho), yahan se manually credentials daal sakte ho.
+              If &quot;Connect WhatsApp&quot; doesn&apos;t work (the Meta app is still in Development mode or verification is pending), you can enter your credentials manually here.
             </p>
           </div>
           <span className="ml-3 text-lg text-muted-foreground">{showManual ? "−" : "+"}</span>
@@ -294,7 +294,7 @@ export function WhatsAppSettingsTab() {
         {showManual && (
           <div className="mt-4 space-y-4 border-t border-border pt-4">
             <p className="text-xs text-muted-foreground">
-              Yeh values Meta App Dashboard → WhatsApp → API Setup mein milti hain.
+              You&apos;ll find these values in Meta App Dashboard → WhatsApp → API Setup.
             </p>
             <div className="space-y-1.5">
               <Label>Business Name</Label>
@@ -336,7 +336,7 @@ export function WhatsAppSettingsTab() {
                 value={manualForm.access_token}
                 onChange={(e) => setManualForm((f) => ({ ...f, access_token: e.target.value }))}
               />
-              <p className="text-[10px] text-muted-foreground">Token encrypt karke store hota hai — kabhi plain text mein nahi rehta.</p>
+              <p className="text-[10px] text-muted-foreground">The token is encrypted at rest — it&apos;s never stored in plain text.</p>
             </div>
             <Button
               onClick={handleManualConnect}
@@ -349,10 +349,10 @@ export function WhatsAppSettingsTab() {
       </div>
 
       {/* Webhook URL — informational, already auto-subscribed during Connect */}
-      <div className="mt-6 rounded-lg border border-border bg-white p-5">
+      <div className="mt-6 rounded-xl border border-border bg-card p-5 shadow-card">
         <h3 className="mb-2 font-semibold">Webhook URL</h3>
         <p className="mb-3 text-sm text-muted-foreground">
-          Yeh Meta App Dashboard mein already configure hai — &quot;Connect WhatsApp&quot; karte hi is customer ke WABA ke liye bhi automatically subscribe ho jaata hai.
+          This is already configured in the Meta App Dashboard — as soon as you connect WhatsApp, this customer&apos;s WABA is subscribed automatically too.
         </p>
         <code className="block rounded bg-muted px-3 py-2 text-sm">
           {process.env.NEXT_PUBLIC_API_URL?.replace("/api/v1", "")}/api/v1/webhooks/whatsapp

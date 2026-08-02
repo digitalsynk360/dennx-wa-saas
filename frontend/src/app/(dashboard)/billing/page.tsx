@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import { Check } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
 import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import type { InvoiceResponse, SubscriptionResponse, UsageResponse } from "@/types/billing";
@@ -56,8 +57,8 @@ export default function BillingPage() {
         {error && <Alert variant="destructive" className="mb-4">{error}</Alert>}
 
         {usage && (
-          <div className="mb-6 rounded-lg border border-border bg-white p-5">
-            <h3 className="font-semibold mb-3">Usage this period</h3>
+          <div className="mb-6 rounded-xl border border-border bg-card p-5 shadow-card">
+            <h3 className="mb-3 font-semibold">Usage this period</h3>
             <div className="mb-3">
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-muted-foreground">Messages sent</span>
@@ -79,12 +80,18 @@ export default function BillingPage() {
           {PLANS.map((plan) => {
             const isCurrent = subscription?.plan === plan.id;
             return (
-              <div key={plan.id} className={`rounded-lg border-2 bg-white p-4 ${isCurrent ? "border-primary" : "border-border"}`}>
+              <div
+                key={plan.id}
+                className={`relative rounded-xl border bg-card p-5 shadow-card transition-shadow hover:shadow-card-hover ${isCurrent ? "border-primary ring-1 ring-primary" : "border-border"}`}
+              >
+                {isCurrent && (
+                  <Badge className="absolute right-3 top-3">Current</Badge>
+                )}
                 <p className="font-semibold">{plan.name}</p>
-                <p className="text-xl font-bold mt-1">{plan.price}</p>
-                <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
-                  <li className="flex gap-1.5"><Check className="h-3.5 w-3.5 text-green-600" /> {plan.messages} messages/mo</li>
-                  <li className="flex gap-1.5"><Check className="h-3.5 w-3.5 text-green-600" /> {plan.seats} seats</li>
+                <p className="mt-1 text-xl font-bold tracking-tight">{plan.price}</p>
+                <ul className="mt-3 space-y-1.5 text-xs text-muted-foreground">
+                  <li className="flex gap-1.5"><Check className="h-3.5 w-3.5 flex-shrink-0 text-primary" /> {plan.messages} messages/mo</li>
+                  <li className="flex gap-1.5"><Check className="h-3.5 w-3.5 flex-shrink-0 text-primary" /> {plan.seats} seats</li>
                 </ul>
                 <Button
                   size="sm"
@@ -100,10 +107,10 @@ export default function BillingPage() {
           })}
         </div>
 
-        <h3 className="font-semibold mb-3">Invoice history</h3>
-        <div className="overflow-hidden rounded-lg border border-border bg-white">
-          <table className="w-full text-sm text-left">
-            <thead className="bg-muted/50 text-xs uppercase text-muted-foreground border-b border-border">
+        <h3 className="mb-3 font-semibold">Invoice history</h3>
+        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-card">
+          <table className="w-full text-left text-sm">
+            <thead className="border-b border-border bg-muted/50 text-xs uppercase text-muted-foreground">
               <tr><th className="px-4 py-3">Invoice</th><th className="px-4 py-3">Amount</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Date</th></tr>
             </thead>
             <tbody>

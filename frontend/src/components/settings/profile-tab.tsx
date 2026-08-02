@@ -21,11 +21,11 @@ export function ProfileTab() {
   const handleChangePassword = async () => {
     setError(null);
     if (next !== confirm) {
-      setError("New password aur confirm password match nahi karte.");
+      setError("New password and confirmation do not match.");
       return;
     }
     if (next.length < 8) {
-      setError("New password kam se kam 8 characters ka hona chahiye.");
+      setError("New password must be at least 8 characters long.");
       return;
     }
     setSaving(true);
@@ -39,7 +39,7 @@ export function ProfileTab() {
       setTimeout(() => setSuccess(null), 3000);
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(msg || "Password change failed — current password check karo.");
+      setError(msg || "Couldn't change password — please check your current password.");
     } finally {
       setSaving(false);
     }
@@ -51,7 +51,7 @@ export function ProfileTab() {
       {success && <Alert variant="success">{success}</Alert>}
 
       {/* ── Account info ── */}
-      <div className="rounded-lg border border-border bg-white p-5">
+      <div className="rounded-xl border border-border bg-card p-5 shadow-card">
         <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold">
           <UserRound className="h-4 w-4 text-primary" /> Account
         </h3>
@@ -76,7 +76,7 @@ export function ProfileTab() {
       </div>
 
       {/* ── Change password ── */}
-      <div className="rounded-lg border border-border bg-white p-5">
+      <div className="rounded-xl border border-border bg-card p-5 shadow-card">
         <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold">
           <KeyRound className="h-4 w-4 text-primary" /> Change Password
         </h3>

@@ -25,7 +25,7 @@ export function WorkspaceTab() {
     setSaving(true);
     try {
       await api.patch("/workspaces/current", { name: name.trim() });
-      setSuccess("Workspace updated. Page refresh ho raha hai...");
+      setSuccess("Workspace updated. Refreshing…");
       setTimeout(() => window.location.reload(), 1200);
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
@@ -39,7 +39,7 @@ export function WorkspaceTab() {
       {error && <Alert variant="destructive">{error}</Alert>}
       {success && <Alert variant="success">{success}</Alert>}
 
-      <div className="rounded-lg border border-border bg-white p-5">
+      <div className="rounded-xl border border-border bg-card p-5 shadow-card">
         <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold">
           <Building2 className="h-4 w-4 text-primary" /> Workspace
         </h3>
@@ -53,7 +53,7 @@ export function WorkspaceTab() {
             />
             {!canManage && (
               <p className="text-xs text-muted-foreground">
-                Sirf owner/admin workspace ka naam badal sakte hain.
+                Only owners and admins can change the workspace name.
               </p>
             )}
           </div>

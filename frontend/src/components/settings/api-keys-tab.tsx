@@ -5,6 +5,7 @@ import { Copy, Key, Plus, Trash2 } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
@@ -53,8 +54,14 @@ export function ApiKeysTab() {
         <Button size="sm" onClick={() => { setModalOpen(true); setNewKey(null); }}><Plus className="h-4 w-4" /> New Key</Button>
       </div>
 
-      <div className="rounded-lg border border-border bg-white divide-y divide-border">
-        {keys.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">No API keys yet.</p>}
+      <div className="divide-y divide-border rounded-xl border border-border bg-card shadow-card">
+        {keys.length === 0 && (
+          <EmptyState
+            icon={Key}
+            title="No API keys yet"
+            description="Create a key to start integrating with the API from your own apps."
+          />
+        )}
         {keys.map((k) => (
           <div key={k.id} className="flex items-center justify-between p-4">
             <div className="flex items-center gap-3">

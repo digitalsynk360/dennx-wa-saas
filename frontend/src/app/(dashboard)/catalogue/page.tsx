@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { api, getErrorMessage } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -118,7 +119,7 @@ export default function CataloguePage() {
   };
 
   const handleDelete = async (p: Product) => {
-    if (!confirm(`"${p.name}" delete karo?`)) return;
+    if (!confirm(`Delete "${p.name}"?`)) return;
     try { await api.delete(`/catalogue/products/${p.id}`); await load(); }
     catch { setError("Delete failed"); }
   };
@@ -135,7 +136,7 @@ export default function CataloguePage() {
   };
 
   const handleDeleteCategory = async (id: string, name: string) => {
-    if (!confirm(`"${name}" category delete karo? Products uncategorized ho jayenge.`)) return;
+    if (!confirm(`Delete the "${name}" category? Its products will become uncategorized.`)) return;
     try { await api.delete(`/catalogue/categories/${id}`); await load(); }
     catch { setError("Delete failed"); }
   };
@@ -157,7 +158,7 @@ export default function CataloguePage() {
         {/* Stats */}
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {stats.map((s) => (
-            <div key={s.label} className="flex items-center gap-3 rounded-xl border border-border bg-white p-4">
+            <div key={s.label} className="flex items-center gap-3 rounded-xl border border-border bg-card p-4">
               <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 <s.icon className="h-4 w-4" />
               </span>
@@ -196,7 +197,7 @@ export default function CataloguePage() {
           <div className="mb-4 flex flex-wrap gap-2">
             <button
               onClick={() => setFilterCat("")}
-              className={cn("rounded-full px-3 py-1 text-xs font-medium transition-colors", !filterCat ? "bg-primary text-white" : "border border-border bg-white text-muted-foreground hover:border-primary hover:text-primary")}
+              className={cn("rounded-full px-3 py-1 text-xs font-medium transition-colors", !filterCat ? "bg-primary text-white" : "border border-border bg-card text-muted-foreground hover:border-primary hover:text-primary")}
             >
               All
             </button>
@@ -204,7 +205,7 @@ export default function CataloguePage() {
               <div key={c.id} className="group relative flex items-center gap-1">
                 <button
                   onClick={() => setFilterCat(c.id === filterCat ? "" : c.id)}
-                  className={cn("rounded-full px-3 py-1 text-xs font-medium transition-colors", filterCat === c.id ? "bg-primary text-white" : "border border-border bg-white text-muted-foreground hover:border-primary hover:text-primary")}
+                  className={cn("rounded-full px-3 py-1 text-xs font-medium transition-colors", filterCat === c.id ? "bg-primary text-white" : "border border-border bg-card text-muted-foreground hover:border-primary hover:text-primary")}
                 >
                   {c.name}
                 </button>
@@ -221,7 +222,7 @@ export default function CataloguePage() {
 
         {/* Products grid */}
         {filtered.length === 0 ? (
-          <div className="rounded-xl border border-border bg-white p-12 text-center">
+          <div className="rounded-xl border border-border bg-card p-12 text-center">
             <Package className="mx-auto mb-3 h-12 w-12 text-muted-foreground" />
             <p className="font-medium">No products</p>
             <p className="text-sm text-muted-foreground">Add your first product to get started</p>
@@ -229,7 +230,7 @@ export default function CataloguePage() {
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filtered.map((p) => (
-              <div key={p.id} className={cn("group relative rounded-2xl border border-border bg-white overflow-hidden shadow-sm transition-shadow hover:shadow-md", !p.is_active && "opacity-60")}>
+              <div key={p.id} className={cn("group relative rounded-2xl border border-border bg-card overflow-hidden shadow-sm transition-shadow hover:shadow-md", !p.is_active && "opacity-60")}>
                 {/* Image */}
                 <div className="relative h-44 w-full bg-gray-100">
                   {p.image_url ? (
@@ -241,10 +242,10 @@ export default function CataloguePage() {
                   )}
                   {/* Action buttons overlay */}
                   <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                    <button onClick={() => openEdit(p)} className="flex h-7 w-7 items-center justify-center rounded-lg bg-white shadow-md hover:bg-muted">
+                    <button onClick={() => openEdit(p)} className="flex h-7 w-7 items-center justify-center rounded-lg bg-card shadow-md hover:bg-muted">
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
-                    <button onClick={() => handleDelete(p)} className="flex h-7 w-7 items-center justify-center rounded-lg bg-white shadow-md hover:bg-red-50 hover:text-red-600">
+                    <button onClick={() => handleDelete(p)} className="flex h-7 w-7 items-center justify-center rounded-lg bg-card shadow-md hover:bg-red-50 hover:text-red-600">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
@@ -288,12 +289,12 @@ export default function CataloguePage() {
           </div>
           <div className="space-y-1.5">
             <Label>Description</Label>
-            <textarea
+            <Textarea
               value={productForm.description}
               onChange={(e) => setProductForm((f) => ({ ...f, description: e.target.value }))}
               rows={2}
               placeholder="Short description..."
-              className="flex w-full rounded-md border border-border bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 resize-none"
+              className="min-h-0 resize-none"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -317,7 +318,7 @@ export default function CataloguePage() {
               <Input value={productForm.sku} onChange={(e) => setProductForm((f) => ({ ...f, sku: e.target.value }))} placeholder="PROD-001" />
             </div>
             <div className="space-y-1.5">
-              <Label>Stock (khali = unlimited)</Label>
+              <Label>Stock (empty = unlimited)</Label>
               <Input type="number" min={0} value={productForm.stock} onChange={(e) => setProductForm((f) => ({ ...f, stock: e.target.value }))} placeholder="100" />
             </div>
           </div>

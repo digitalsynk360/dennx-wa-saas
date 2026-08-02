@@ -2,7 +2,7 @@ import { MessageCircle } from "lucide-react";
 
 /**
  * Shared shell for /login, /signup, /forgot-password, /reset-password:
- * deep teal full-screen backdrop, centered white card.
+ * deep teal full-screen backdrop with a soft radial glow, centered card.
  * Mobile: comfortable padding; card never touches screen edges.
  */
 export function AuthLayout({
@@ -18,13 +18,25 @@ export function AuthLayout({
 }) {
   return (
     <main
-      className="flex min-h-screen items-center justify-center p-4"
+      className="relative flex min-h-screen items-center justify-center overflow-hidden p-4"
       style={{ backgroundColor: "hsl(var(--teal-deep))" }}
     >
-      <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg sm:p-8">
+      {/* Soft brand glow for depth */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(60% 50% at 50% 0%, hsl(var(--primary) / 0.22), transparent 70%)",
+        }}
+      />
+
+      <div className="relative w-full max-w-md animate-slide-up rounded-2xl border border-white/10 bg-card p-6 shadow-2xl sm:p-8">
         <div className="mb-6 flex flex-col items-center text-center">
-          <MessageCircle className="mb-2 h-10 w-10 text-muted-foreground" strokeWidth={1.5} />
-          <h1 className="text-xl font-bold text-foreground sm:text-2xl">{title}</h1>
+          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <MessageCircle className="h-6 w-6" strokeWidth={2} />
+          </div>
+          <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">{title}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>
         </div>
 

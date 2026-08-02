@@ -16,12 +16,15 @@ const PERIOD_OPTIONS = [
 
 function MetricCard({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string | number; sub?: string }) {
   return (
-    <div className="rounded-lg border border-border bg-white p-4">
-      <div className="flex items-center gap-2 text-muted-foreground text-sm mb-2">
-        {icon} {label}
+    <div className="rounded-xl border border-border bg-card p-5 shadow-card transition-shadow hover:shadow-card-hover">
+      <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          {icon}
+        </span>
+        {label}
       </div>
-      <p className="text-2xl font-semibold">{value}</p>
-      {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
+      <p className="text-2xl font-semibold tracking-tight">{value}</p>
+      {sub && <p className="mt-1 text-xs text-muted-foreground">{sub}</p>}
     </div>
   );
 }
@@ -64,10 +67,10 @@ export default function AnalyticsPage() {
               <MetricCard icon={<Clock className="h-4 w-4" />} label="Avg Response Time" value={data.metrics.avg_response_time_minutes ? `${data.metrics.avg_response_time_minutes}m` : "—"} />
             </div>
 
-            <div className="rounded-lg border border-border bg-white p-4 mb-6">
-              <h3 className="font-semibold text-sm mb-3">Messages over time</h3>
+            <div className="mb-6 rounded-xl border border-border bg-card p-5 shadow-card">
+              <h3 className="mb-4 text-sm font-semibold">Messages over time</h3>
               {data.daily_messages.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-8 text-center">No message data for this period yet.</p>
+                <p className="py-8 text-center text-sm text-muted-foreground">No message data for this period yet.</p>
               ) : (
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={data.daily_messages}>
@@ -83,14 +86,14 @@ export default function AnalyticsPage() {
               )}
             </div>
 
-            <div className="rounded-lg border border-border bg-white p-4">
-              <h3 className="font-semibold text-sm mb-3 flex items-center gap-2"><Megaphone className="h-4 w-4" /> Campaign Performance</h3>
+            <div className="rounded-xl border border-border bg-card p-5 shadow-card">
+              <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold"><Megaphone className="h-4 w-4 text-primary" /> Campaign Performance</h3>
               {data.campaign_performance.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-8 text-center">No campaigns in this period yet.</p>
+                <p className="py-8 text-center text-sm text-muted-foreground">No campaigns in this period yet.</p>
               ) : (
                 <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="text-xs uppercase text-muted-foreground border-b border-border">
+                <table className="w-full text-left text-sm">
+                  <thead className="border-b border-border text-xs uppercase text-muted-foreground">
                     <tr>
                       <th className="py-2">Campaign</th>
                       <th className="py-2">Sent</th>

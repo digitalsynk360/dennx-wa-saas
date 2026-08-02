@@ -121,14 +121,14 @@ export default function ContactsPage() {
       const text = String(reader.result || "");
       const lines = text.split(/\r?\n/).filter((l) => l.trim());
       if (lines.length < 2) {
-        setError("CSV khali hai ya sirf header hai.");
+        setError("The CSV is empty or only contains a header row.");
         if (fileRef.current) fileRef.current.value = "";
         return;
       }
       const header = lines[0].toLowerCase().split(",").map((h) => h.trim());
       const phoneIdx = header.indexOf("phone");
       if (phoneIdx === -1) {
-        setError('CSV mein "phone" column nahi mila. Template download karke dekho.');
+        setError('No "phone" column found in the CSV. Download the template to see the expected format.');
         if (fileRef.current) fileRef.current.value = "";
         return;
       }
@@ -139,7 +139,7 @@ export default function ContactsPage() {
         if (phone && !seen.has(phone)) { seen.add(phone); valid++; }
       }
       if (valid === 0) {
-        setError("Koi valid contact nahi mila CSV mein.");
+        setError("No valid contacts found in the CSV.");
         if (fileRef.current) fileRef.current.value = "";
         return;
       }
@@ -180,7 +180,7 @@ export default function ContactsPage() {
       closeImport();
       await load();
     } catch {
-      setError("Import failed — CSV format check karo.");
+      setError("Import failed — please check the CSV format.");
     } finally { setImporting(false); }
   };
 
@@ -277,7 +277,7 @@ export default function ContactsPage() {
             <TagIcon className="h-3.5 w-3.5 text-muted-foreground" />
             <button
               onClick={() => setFilterTag("")}
-              className={cn("rounded-full px-3 py-1 text-xs font-medium transition-colors", !filterTag ? "bg-primary text-white" : "border border-border bg-white text-muted-foreground hover:border-primary hover:text-primary")}
+              className={cn("rounded-full px-3 py-1 text-xs font-medium transition-colors", !filterTag ? "bg-primary text-white" : "border border-border bg-card text-muted-foreground hover:border-primary hover:text-primary")}
             >
               All
             </button>
@@ -285,7 +285,7 @@ export default function ContactsPage() {
               <button
                 key={t.id}
                 onClick={() => setFilterTag(t.id === filterTag ? "" : t.id)}
-                className={cn("rounded-full px-3 py-1 text-xs font-medium transition-colors", filterTag === t.id ? "bg-primary text-white" : "border border-border bg-white text-muted-foreground hover:border-primary hover:text-primary")}
+                className={cn("rounded-full px-3 py-1 text-xs font-medium transition-colors", filterTag === t.id ? "bg-primary text-white" : "border border-border bg-card text-muted-foreground hover:border-primary hover:text-primary")}
               >
                 {t.name}
               </button>
@@ -294,7 +294,7 @@ export default function ContactsPage() {
         )}
 
         {/* Table */}
-        <div className="rounded-lg border border-border bg-white">
+        <div className="rounded-xl border border-border bg-card shadow-card">
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
               <thead className="border-b border-border text-xs uppercase text-muted-foreground">
@@ -406,7 +406,7 @@ export default function ContactsPage() {
 
           <div className="space-y-1.5">
             <Label>Assign to group(s) — optional</Label>
-            <p className="text-xs text-muted-foreground">Selected groups sab imported contacts pe lagenge. Multiple select kar sakte ho.</p>
+            <p className="text-xs text-muted-foreground">Selected groups will be applied to all imported contacts. You can choose more than one.</p>
             {allTags.length > 0 && (
               <div className="flex max-h-32 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-border bg-muted/30 p-2">
                 {allTags.map((t) => {
@@ -420,7 +420,7 @@ export default function ContactsPage() {
                         if (selected) next.delete(t.id); else next.add(t.id);
                         return next;
                       })}
-                      className={cn("rounded-full px-3 py-1 text-xs font-medium transition-colors", selected ? "bg-primary text-white" : "border border-border bg-white text-muted-foreground hover:border-primary hover:text-primary")}
+                      className={cn("rounded-full px-3 py-1 text-xs font-medium transition-colors", selected ? "bg-primary text-white" : "border border-border bg-card text-muted-foreground hover:border-primary hover:text-primary")}
                     >
                       {selected && "✓ "}{t.name}
                     </button>
@@ -502,7 +502,7 @@ export default function ContactsPage() {
                         <button
                           key={t.id}
                           onClick={() => editAttachTag(t.id)}
-                          className="rounded-full border border-border bg-white px-2 py-0.5 text-xs hover:border-primary hover:text-primary"
+                          className="rounded-full border border-border bg-card px-2 py-0.5 text-xs hover:border-primary hover:text-primary"
                         >
                           + {t.name}
                         </button>

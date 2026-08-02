@@ -76,7 +76,7 @@ export default function DashboardGroupLayout({ children }: { children: React.Rea
       <div className="flex min-h-screen flex-col">
         {impersonating && (
           <div className="flex h-9 flex-shrink-0 items-center justify-center gap-2 bg-amber-500 px-4 text-xs font-medium text-white">
-            👁️ Superadmin ke roop mein — is user ke account ko dekh rahe ho
+            👁️ Viewing as superadmin — you&apos;re browsing this user&apos;s account
             <button
               onClick={returnToAdmin}
               className="ml-2 rounded-full bg-white/20 px-2.5 py-0.5 font-semibold hover:bg-white/30"
@@ -87,12 +87,12 @@ export default function DashboardGroupLayout({ children }: { children: React.Rea
         )}
         {planExpired && (
           <div className="flex h-9 flex-shrink-0 items-center justify-center gap-2 bg-red-600 px-4 text-xs font-medium text-white">
-            ⚠️ Aapka plan expire ho gaya hai — naye campaigns/messages bhejne se pehle plan renew karo. Aapka existing data safe hai.
+            ⚠️ Your plan has expired — renew it before sending new campaigns or messages. Your existing data is safe.
           </div>
         )}
         {!planExpired && expiringSoonDays !== null && (
           <div className="flex h-9 flex-shrink-0 items-center justify-center gap-2 bg-amber-100 px-4 text-xs font-medium text-amber-800">
-            ⏳ Aapka plan {expiringSoonDays === 0 ? "aaj" : `${expiringSoonDays} din mein`} expire ho raha hai — renew karne ke liye admin se contact karo.
+            ⏳ Your plan expires {expiringSoonDays === 0 ? "today" : `in ${expiringSoonDays} day${expiringSoonDays === 1 ? "" : "s"}`} — contact your admin to renew.
           </div>
         )}
         <div className="flex min-h-0 flex-1">

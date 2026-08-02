@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { api, getErrorMessage } from "@/lib/api";
 
 const BUSINESS_TYPES = [
@@ -29,7 +30,7 @@ export default function DemoRequestPage() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.full_name.trim() || !form.business_name.trim() || !form.phone.trim() || !form.email.trim()) {
-      setError("Naam, business naam, phone aur email zaroori hain");
+      setError("Name, business name, phone and email are required.");
       return;
     }
     setSubmitting(true); setError(null);
@@ -37,7 +38,7 @@ export default function DemoRequestPage() {
       await api.post("/demo", form);
       setSubmitted(true);
     } catch (e: unknown) {
-      setError(getErrorMessage(e, "Kuch galat ho gaya — dobara try karo"));
+      setError(getErrorMessage(e, "Something went wrong — please try again."));
     } finally {
       setSubmitting(false);
     }
@@ -45,15 +46,15 @@ export default function DemoRequestPage() {
 
   if (submitted) {
     return (
-      <AuthLayout title="Thank You!" description="Hum jald aapse contact karenge">
+      <AuthLayout title="Thank You!" description="We'll be in touch soon">
         <div className="flex flex-col items-center gap-3 py-4 text-center">
           <CheckCircle2 className="h-14 w-14 text-green-500" />
           <p className="text-sm text-muted-foreground">
-            Aapka demo request mil gaya hai. Hamari team 24 ghanton ke andar aapse contact karegi
-            aapka WhatsApp Business account setup karne ke liye.
+            We&apos;ve received your demo request. Our team will contact you within 24 hours
+            to set up your WhatsApp Business account.
           </p>
           <Link href="/login" className="mt-2 text-sm font-medium text-primary hover:underline">
-            Already account hai? Login karo →
+            Already have an account? Sign in →
           </Link>
         </div>
       </AuthLayout>
@@ -63,12 +64,12 @@ export default function DemoRequestPage() {
   return (
     <AuthLayout
       title="Book a Free Demo"
-      description="WhatsApp Business automation — apna account 24 ghanton mein live karo"
+      description="WhatsApp Business automation — get your account live within 24 hours"
       footer={
         <>
-          Already account hai?{" "}
+          Already have an account?{" "}
           <Link href="/login" className="font-medium text-primary hover:underline">
-            Login karo
+            Sign in
           </Link>
         </>
       }
@@ -76,7 +77,7 @@ export default function DemoRequestPage() {
       {error && <Alert variant="destructive" className="mb-4">{error}</Alert>}
       <form onSubmit={onSubmit} className="space-y-4">
         <div className="space-y-1.5">
-          <Label>Aapka Naam *</Label>
+          <Label>Your Name *</Label>
           <Input
             value={form.full_name}
             onChange={(e) => setForm({ ...form, full_name: e.target.value })}
@@ -84,7 +85,7 @@ export default function DemoRequestPage() {
           />
         </div>
         <div className="space-y-1.5">
-          <Label>Business Naam *</Label>
+          <Label>Business Name *</Label>
           <Input
             value={form.business_name}
             onChange={(e) => setForm({ ...form, business_name: e.target.value })}
@@ -116,7 +117,7 @@ export default function DemoRequestPage() {
             value={form.business_type}
             onChange={(e) => setForm({ ...form, business_type: e.target.value })}
           >
-            <option value="">Select karo (optional)</option>
+            <option value="">Select (optional)</option>
             {BUSINESS_TYPES.map((t) => (
               <option key={t} value={t}>{t}</option>
             ))}
@@ -124,12 +125,11 @@ export default function DemoRequestPage() {
         </div>
         <div className="space-y-1.5">
           <Label>Message (optional)</Label>
-          <textarea
+          <Textarea
             value={form.message}
             onChange={(e) => setForm({ ...form, message: e.target.value })}
-            placeholder="Aapko kis type ka WhatsApp automation chahiye..."
+            placeholder="What kind of WhatsApp automation are you looking for…"
             rows={3}
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
         <Button type="submit" disabled={submitting} className="w-full">

@@ -32,15 +32,15 @@ const PLANS = [
 ];
 
 const FAQS = [
-  { q: "Kya mera WhatsApp number ban ho sakta hai?", a: "Nahi. Deenx AI official WhatsApp Business Cloud API par bana hai — Meta ke rules ke andar. Unofficial tools se bilkul alag." },
-  { q: "Kya mujhe coding aani chahiye?", a: "Bilkul nahi. Flow builder drag-and-drop hai aur chatbot rules simple form se bante hain." },
-  { q: "Existing number use kar sakta hoon?", a: "Haan — koi bhi number jo WhatsApp Business API ke liye eligible hai, minutes mein connect ho jata hai." },
-  { q: "Free trial hai?", a: "Haan — demo book karo, humari team turant 3-din ka free trial activate kar degi, bina card ke." },
+  { q: "Can my WhatsApp number get banned?", a: "No. Deenx AI is built on the official WhatsApp Business Cloud API, fully within Meta's rules — completely different from unofficial tools." },
+  { q: "Do I need to know how to code?", a: "Not at all. The flow builder is drag-and-drop, and chatbot rules are set up with a simple form." },
+  { q: "Can I use my existing number?", a: "Yes — any number eligible for the WhatsApp Business API connects in minutes." },
+  { q: "Is there a free trial?", a: "Yes — book a demo and our team will activate a 3-day free trial right away, no card required." },
 ];
 
 function ChatMockup() {
   return (
-    <div className="w-full max-w-sm rounded-2xl border border-white/15 bg-white/10 p-3 shadow-2xl backdrop-blur">
+    <div className="w-full max-w-sm rounded-2xl border border-white/15 bg-card/10 p-3 shadow-2xl backdrop-blur">
       {/* phone header */}
       <div className="flex items-center gap-2 rounded-t-xl bg-[hsl(175,60%,18%)] px-3 py-2.5">
         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">D</div>
@@ -51,18 +51,18 @@ function ChatMockup() {
       </div>
       {/* messages */}
       <div className="space-y-2 rounded-b-xl bg-[hsl(90,25%,92%)] p-3">
-        <div className="max-w-[80%] rounded-lg rounded-tl-none bg-white px-3 py-2 text-xs text-gray-800 shadow-sm">
-          Hi! Price kya hai? 👋
+        <div className="max-w-[80%] rounded-lg rounded-tl-none bg-card px-3 py-2 text-xs text-gray-800 shadow-sm">
+          Hi! What&apos;s the price? 👋
         </div>
         <div className="ml-auto max-w-[85%] rounded-lg rounded-tr-none bg-[#d9fdd3] px-3 py-2 text-xs text-gray-800 shadow-sm">
-          Namaste! 🙏 Hamare plans ₹999/month se start hote hain. Aapko kaunsa product chahiye?
+          Hello! 🙏 Our plans start at ₹999/month. Which product are you looking for?
           <span className="mt-1 flex items-center justify-end gap-0.5 text-[9px] text-gray-500">
             2:14 PM <CheckCheck className="h-3 w-3 text-sky-500" />
           </span>
         </div>
         <div className="ml-auto grid max-w-[85%] gap-1">
-          <div className="rounded-lg border border-primary/40 bg-white px-3 py-1.5 text-center text-xs font-medium text-primary shadow-sm">📦 Products dekhen</div>
-          <div className="rounded-lg border border-primary/40 bg-white px-3 py-1.5 text-center text-xs font-medium text-primary shadow-sm">💬 Agent se baat karen</div>
+          <div className="rounded-lg border border-primary/40 bg-card px-3 py-1.5 text-center text-xs font-medium text-primary shadow-sm">📦 View products</div>
+          <div className="rounded-lg border border-primary/40 bg-card px-3 py-1.5 text-center text-xs font-medium text-primary shadow-sm">💬 Talk to an agent</div>
         </div>
         <div className="flex items-center gap-1.5 pt-1">
           <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">
@@ -76,9 +76,9 @@ function ChatMockup() {
 
 export default function Home() {
   return (
-    <main className="bg-white text-foreground">
+    <main className="bg-card text-foreground">
       {/* ── Nav ── */}
-      <header className="sticky top-0 z-40 border-b border-border bg-white/90 backdrop-blur">
+      <header className="sticky top-0 z-40 border-b border-border bg-card/90 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2 font-bold">
             <MessageCircle className="h-6 w-6 text-primary" />
@@ -104,25 +104,25 @@ export default function Home() {
       {/* ── Hero ── */}
       <section className="relative overflow-hidden" style={{ backgroundColor: "hsl(var(--teal-deep))" }}>
         <div className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-primary/20 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-32 -left-24 h-80 w-80 rounded-full bg-white/10 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-32 -left-24 h-80 w-80 rounded-full bg-card/10 blur-3xl" />
         <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-16 sm:px-6 sm:py-24 lg:grid-cols-2">
           <div className="text-white">
-            <span className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-medium">
+            <span className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-card/10 px-3 py-1 text-xs font-medium">
               <Zap className="h-3.5 w-3.5 text-primary" /> Official WhatsApp Business API
             </span>
             <h1 className="text-4xl font-extrabold leading-tight sm:text-5xl">
-              WhatsApp par business,<br />
-              <span className="text-primary">autopilot</span> par growth.
+              Business on WhatsApp,<br />
+              growth on <span className="text-primary">autopilot</span>.
             </h1>
             <p className="mt-4 max-w-lg text-white/80 sm:text-lg">
-              AI chatbot, visual flow builder, broadcast campaigns aur team inbox —
-              sab ek platform mein. Setup minutes mein, results pehle din se.
+              AI chatbot, visual flow builder, broadcast campaigns and a team inbox —
+              all in one platform. Set up in minutes, results from day one.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg" className="text-base">
                 <Link href="/demo">Book Free Demo <ArrowRight className="h-4 w-4" /></Link>
               </Button>
-              <Button asChild size="lg" variant="outline" className="border-white/30 bg-transparent text-white hover:bg-white/10 text-base">
+              <Button asChild size="lg" variant="outline" className="border-white/30 bg-transparent text-white hover:bg-card/10 text-base">
                 <Link href="/login">Live Demo</Link>
               </Button>
             </div>
@@ -153,12 +153,12 @@ export default function Home() {
       {/* ── Features ── */}
       <section id="features" className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-bold sm:text-4xl">Sab kuch jo WhatsApp growth ke liye chahiye</h2>
-          <p className="mt-3 text-muted-foreground">Ek subscription. Poora automation stack.</p>
+          <h2 className="text-3xl font-bold sm:text-4xl">Everything you need for WhatsApp growth</h2>
+          <p className="mt-3 text-muted-foreground">One subscription. The complete automation stack.</p>
         </div>
         <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map((f) => (
-            <div key={f.title} className="group rounded-2xl border border-border bg-white p-6 shadow-sm transition-shadow hover:shadow-md">
+            <div key={f.title} className="group rounded-2xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md">
               <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
                 <f.icon className="h-5 w-5" />
               </div>
@@ -173,12 +173,12 @@ export default function Home() {
       <section id="how" className="border-y border-border bg-muted/40">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
           <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-bold sm:text-4xl">3 steps mein live</h2>
-            <p className="mt-3 text-muted-foreground">Koi agency nahi, koi developer nahi — khud karo, aaj karo.</p>
+            <h2 className="text-3xl font-bold sm:text-4xl">Live in 3 steps</h2>
+            <p className="mt-3 text-muted-foreground">No agency, no developer — do it yourself, today.</p>
           </div>
           <div className="mt-12 grid gap-8 md:grid-cols-3">
             {STEPS.map((s) => (
-              <div key={s.n} className="relative rounded-2xl border border-border bg-white p-6">
+              <div key={s.n} className="relative rounded-2xl border border-border bg-card p-6">
                 <span className="absolute -top-4 left-6 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">{s.n}</span>
                 <h3 className="mt-2 font-semibold">{s.title}</h3>
                 <p className="mt-1.5 text-sm text-muted-foreground">{s.desc}</p>
@@ -192,7 +192,7 @@ export default function Home() {
       <section id="pricing" className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="text-3xl font-bold sm:text-4xl">Simple pricing, no surprises</h2>
-          <p className="mt-3 text-muted-foreground">Har plan mein official API, team inbox aur unlimited flows.</p>
+          <p className="mt-3 text-muted-foreground">Every plan includes the official API, team inbox and unlimited flows.</p>
         </div>
         <div className="mt-12 grid gap-6 lg:grid-cols-3">
           {PLANS.map((p) => (
@@ -200,8 +200,8 @@ export default function Home() {
               key={p.name}
               className={
                 p.popular
-                  ? "relative rounded-2xl border-2 border-primary bg-white p-6 shadow-lg"
-                  : "rounded-2xl border border-border bg-white p-6 shadow-sm"
+                  ? "relative rounded-2xl border-2 border-primary bg-card p-6 shadow-lg"
+                  : "rounded-2xl border border-border bg-card p-6 shadow-sm"
               }
             >
               {p.popular && (
@@ -230,10 +230,10 @@ export default function Home() {
       {/* ── FAQ ── */}
       <section id="faq" className="border-t border-border bg-muted/40">
         <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6 sm:py-20">
-          <h2 className="text-center text-3xl font-bold sm:text-4xl">Aksar poochhe jaane wale sawaal</h2>
+          <h2 className="text-center text-3xl font-bold sm:text-4xl">Frequently asked questions</h2>
           <div className="mt-10 space-y-3">
             {FAQS.map((f) => (
-              <details key={f.q} className="group rounded-xl border border-border bg-white p-4 [&_summary::-webkit-details-marker]:hidden">
+              <details key={f.q} className="group rounded-xl border border-border bg-card p-4 [&_summary::-webkit-details-marker]:hidden">
                 <summary className="flex cursor-pointer items-center justify-between font-medium">
                   {f.q}
                   <ArrowRight className="h-4 w-4 flex-shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
@@ -248,8 +248,8 @@ export default function Home() {
       {/* ── Final CTA ── */}
       <section style={{ backgroundColor: "hsl(var(--teal-deep))" }}>
         <div className="mx-auto max-w-4xl px-4 py-16 text-center text-white sm:px-6 sm:py-20">
-          <h2 className="text-3xl font-bold sm:text-4xl">Aaj hi WhatsApp ko apna best salesman banao</h2>
-          <p className="mx-auto mt-3 max-w-xl text-white/80">Signup free hai. Setup 5 minute ka hai. Results pehle din se.</p>
+          <h2 className="text-3xl font-bold sm:text-4xl">Make WhatsApp your best salesperson today</h2>
+          <p className="mx-auto mt-3 max-w-xl text-white/80">Signing up is free. Setup takes 5 minutes. Results from day one.</p>
           <Button asChild size="lg" className="mt-8 text-base">
             <Link href="/demo">Book Free Demo <ArrowRight className="h-4 w-4" /></Link>
           </Button>

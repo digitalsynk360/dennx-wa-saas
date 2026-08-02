@@ -36,9 +36,10 @@ export function Dialog({
         role="dialog"
         aria-modal="true"
         className={cn(
-          "relative z-10 flex w-full flex-col bg-white shadow-lg",
-          "max-h-[92dvh] rounded-t-2xl",           // mobile: bottom sheet
-          "sm:max-h-[85vh] sm:max-w-md sm:rounded-lg" // desktop: centered modal
+          "relative z-10 flex w-full flex-col bg-card text-card-foreground shadow-xl",
+          "max-h-[92dvh] rounded-t-2xl",                    // mobile: bottom sheet
+          "sm:max-h-[85vh] sm:max-w-md sm:rounded-xl",      // desktop: centered modal
+          "duration-200 animate-slide-up"
         )}
       >
         {children}

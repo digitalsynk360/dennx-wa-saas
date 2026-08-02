@@ -58,13 +58,13 @@ function StatCard({
     teal: "bg-teal-50 text-teal-600",
   };
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 p-5">
-      <div className="flex items-start justify-between mb-3">
+    <div className="rounded-2xl border border-border bg-card p-5 shadow-card transition-shadow hover:shadow-card-hover">
+      <div className="mb-3 flex items-start justify-between">
         <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${colors[color]}`}>
           <Icon className="h-5 w-5" />
         </span>
         {growth !== null && growth !== undefined && (
-          <span className={`flex items-center gap-1 text-xs font-medium rounded-full px-2 py-1 ${
+          <span className={`flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${
             growth >= 0 ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"
           }`}>
             {growth >= 0
@@ -74,9 +74,9 @@ function StatCard({
           </span>
         )}
       </div>
-      <p className="text-2xl font-bold text-gray-900 mb-0.5">{value}</p>
-      <p className="text-sm font-medium text-gray-500">{label}</p>
-      {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+      <p className="mb-0.5 text-2xl font-bold tracking-tight text-foreground">{value}</p>
+      <p className="text-sm font-medium text-muted-foreground">{label}</p>
+      {sub && <p className="mt-1 text-xs text-muted-foreground">{sub}</p>}
     </div>
   );
 }
@@ -113,20 +113,20 @@ export default function DashboardPage() {
   if (loading) return (
     <><Topbar title="Dashboard" />
     <div className="p-8 flex items-center justify-center min-h-64">
-      <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-600 border-t-transparent" />
+      <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent" />
     </div>
     </>
   );
 
   if (!data) return (
-    <><Topbar title="Dashboard" /><div className="p-8 text-center text-gray-400">Failed to load dashboard.</div></>
+    <><Topbar title="Dashboard" /><div className="p-8 text-center text-muted-foreground">Failed to load dashboard.</div></>
   );
 
   return (
     <>
     <Topbar title="Dashboard" />
     <div className="p-4 sm:p-6 space-y-6">
-      <p className="text-sm text-gray-500">Overview of your WhatsApp workspace</p>
+      <p className="text-sm text-muted-foreground">Overview of your WhatsApp workspace</p>
 
       {/* ── Quick Actions ── */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -139,9 +139,9 @@ export default function DashboardPage() {
           <Link
             key={a.href}
             href={a.href}
-            className="group flex items-center gap-2.5 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-700 shadow-sm transition-all hover:border-primary hover:text-primary hover:shadow-md"
+            className="group flex items-center gap-2.5 rounded-2xl border border-border bg-card px-4 py-3 text-sm font-medium text-foreground shadow-sm transition-all hover:border-primary hover:text-primary hover:shadow-md"
           >
-            <a.icon className="h-4 w-4 text-gray-400 transition-colors group-hover:text-primary" />
+            <a.icon className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-primary" />
             {a.label}
           </Link>
         ))}
@@ -215,8 +215,8 @@ export default function DashboardPage() {
       </div>
 
       {/* Chart */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-5">
-        <h2 className="text-sm font-semibold text-gray-700 mb-4">Messages — Last 7 Days</h2>
+      <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
+        <h2 className="text-sm font-semibold text-foreground mb-4">Messages — Last 7 Days</h2>
         <ResponsiveContainer width="100%" height={240}>
           <BarChart data={data.daily_chart} barGap={4}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -235,35 +235,35 @@ export default function DashboardPage() {
 
       {/* ── Meta WhatsApp Insights (live from Meta, selectable period) ── */}
       {data.meta_insights && (
-        <div className="bg-white rounded-2xl border border-gray-200 p-5">
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-gray-700">
-              WhatsApp Insights (Meta) {metaLoading && <span className="text-gray-400">— updating...</span>}
+            <h2 className="text-sm font-semibold text-foreground">
+              WhatsApp Insights (Meta) {metaLoading && <span className="text-muted-foreground">— updating...</span>}
             </h2>
             <div className="flex items-center gap-2">
               <select
                 value={metaDays}
                 onChange={(e) => setMetaDays(Number(e.target.value))}
                 disabled={metaLoading}
-                className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="rounded-lg border border-input px-2.5 py-1 text-xs font-medium text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
               >
                 <option value={7}>Last 7 days</option>
                 <option value={30}>Last 30 days</option>
                 <option value={60}>Last 60 days</option>
                 <option value={90}>Last 90 days</option>
               </select>
-              <span className="text-[10px] uppercase tracking-wide text-gray-400">Live from WhatsApp Manager</span>
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Live from WhatsApp Manager</span>
             </div>
           </div>
 
           {/* Phone number identity + health */}
           {data.meta_insights.phone_health && (
-            <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3">
+            <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted/50 p-3">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-gray-800">
+                <p className="truncate text-sm font-semibold text-foreground">
                   {data.meta_insights.phone_health.verified_name || "—"}
                 </p>
-                <p className="text-xs text-gray-500">{data.meta_insights.phone_health.display_phone_number || "—"}</p>
+                <p className="text-xs text-muted-foreground">{data.meta_insights.phone_health.display_phone_number || "—"}</p>
               </div>
               {(() => {
                 const q = (data.meta_insights.phone_health.quality_rating || "UNKNOWN").toUpperCase();
@@ -271,7 +271,7 @@ export default function DashboardPage() {
                   GREEN: { label: "High Quality", cls: "bg-green-100 text-green-700" },
                   YELLOW: { label: "Medium Quality", cls: "bg-amber-100 text-amber-700" },
                   RED: { label: "Low Quality", cls: "bg-red-100 text-red-700" },
-                  UNKNOWN: { label: "Unknown", cls: "bg-gray-200 text-gray-600" },
+                  UNKNOWN: { label: "Unknown", cls: "bg-gray-200 text-muted-foreground" },
                 };
                 const info = map[q] || map.UNKNOWN;
                 return (
@@ -305,19 +305,19 @@ export default function DashboardPage() {
           )}
 
           <div className="mb-4 grid grid-cols-3 gap-3">
-            <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-center">
-              <p className="text-xl font-bold text-gray-800">{data.meta_insights.sent}</p>
-              <p className="text-xs text-gray-500">Messages Sent</p>
+            <div className="rounded-xl border border-border bg-muted/50 p-3 text-center">
+              <p className="text-xl font-bold text-foreground">{data.meta_insights.sent}</p>
+              <p className="text-xs text-muted-foreground">Messages Sent</p>
             </div>
-            <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-center">
+            <div className="rounded-xl border border-border bg-muted/50 p-3 text-center">
               <p className="text-xl font-bold text-green-600">{data.meta_insights.delivered}</p>
-              <p className="text-xs text-gray-500">Delivered</p>
+              <p className="text-xs text-muted-foreground">Delivered</p>
             </div>
-            <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-center">
+            <div className="rounded-xl border border-border bg-muted/50 p-3 text-center">
               <p className="text-xl font-bold text-blue-600">
                 {data.meta_insights.delivery_rate !== null ? `${data.meta_insights.delivery_rate}%` : "—"}
               </p>
-              <p className="text-xs text-gray-500">Delivery Rate</p>
+              <p className="text-xs text-muted-foreground">Delivery Rate</p>
             </div>
           </div>
           <ResponsiveContainer width="100%" height={160}>
@@ -337,8 +337,8 @@ export default function DashboardPage() {
       {/* ── Handling split + Recent conversations ── */}
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Bot vs Human donut */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-2">Open Chats — Who&apos;s Handling</h2>
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
+          <h2 className="text-sm font-semibold text-foreground mb-2">Open Chats — Who&apos;s Handling</h2>
           {(() => {
             const bot = data.conversations.bot_handling;
             const human = Math.max(data.conversations.open - bot, 0);
@@ -348,7 +348,7 @@ export default function DashboardPage() {
             ];
             const COLORS = ["#16a34a", "#3b82f6"];
             return data.conversations.open === 0 ? (
-              <p className="py-10 text-center text-sm text-gray-400">No open conversations</p>
+              <p className="py-10 text-center text-sm text-muted-foreground">No open conversations</p>
             ) : (
               <>
                 <ResponsiveContainer width="100%" height={170}>
@@ -369,31 +369,31 @@ export default function DashboardPage() {
         </div>
 
         {/* Recent conversations */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 lg:col-span-2">
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-card lg:col-span-2">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-700">Recent Conversations</h2>
+            <h2 className="text-sm font-semibold text-foreground">Recent Conversations</h2>
             <Link href="/inbox" className="flex items-center gap-1 text-xs font-medium text-primary hover:underline">
               Open Inbox <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
           {recent.length === 0 ? (
-            <p className="py-8 text-center text-sm text-gray-400">No conversations yet</p>
+            <p className="py-8 text-center text-sm text-muted-foreground">No conversations yet</p>
           ) : (
-            <div className="divide-y divide-gray-100">
+            <div className="divide-y divide-border">
               {recent.map((c) => (
                 <Link
                   key={c.id}
                   href="/inbox"
-                  className="flex items-center gap-3 py-2.5 transition-colors hover:bg-gray-50 -mx-2 px-2 rounded-lg"
+                  className="flex items-center gap-3 py-2.5 transition-colors hover:bg-muted/50 -mx-2 px-2 rounded-lg"
                 >
                   <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                     <UserRound className="h-4 w-4" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-gray-800">
+                    <span className="block truncate text-sm font-medium text-foreground">
                       {c.contact.name || c.contact.phone}
                     </span>
-                    <span className="block truncate text-xs text-gray-400">
+                    <span className="block truncate text-xs text-muted-foreground">
                       {c.last_message_preview || "—"}
                     </span>
                   </span>

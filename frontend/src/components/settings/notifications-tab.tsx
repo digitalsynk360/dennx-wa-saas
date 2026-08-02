@@ -38,7 +38,7 @@ export function NotificationsTab() {
   return (
     <div className="max-w-2xl">
       {error && <Alert variant="destructive" className="mb-4">{error}</Alert>}
-      <div className="rounded-lg border border-border bg-white divide-y divide-border">
+      <div className="divide-y divide-border rounded-xl border border-border bg-card shadow-card">
         {TOGGLES.map((t) => (
           <div key={t.key} className="flex items-center justify-between gap-4 p-4">
             <div className="min-w-0">

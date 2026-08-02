@@ -307,7 +307,7 @@ export default function SuperAdminPanel() {
   };
 
   const loginAsUser = async (userId: string, userEmail: string) => {
-    if (!confirm(`${userEmail} ke roop mein login karoge? Dashboard pe ek "Return to Admin" button milega wapas aane ke liye.`)) return;
+    if (!confirm(`Log in as ${userEmail}? You'll get a "Return to Admin" button on the dashboard to come back.`)) return;
     setImpersonating(userId);
     try {
       const { data } = await api.post<{ access_token: string; refresh_token: string }>(`/admin/users/${userId}/impersonate`);
@@ -330,15 +330,15 @@ export default function SuperAdminPanel() {
 
   const createUser = async () => {
     if (!newUser.full_name.trim() || !newUser.email.trim() || newUser.password.length < 8) {
-      setError("Naam, email zaroori hain — password kam se kam 8 characters ka ho");
+      setError("Name and email are required — password must be at least 8 characters.");
       return;
     }
     if (wsMode === "existing" && (!newUser.workspace_id || !newUser.role_name)) {
-      setError("Workspace aur Role dono select karo — ya 'Naya Workspace' tab pe switch karo.");
+      setError("Select both a Workspace and a Role — or use the 'Create New Workspace' tab.");
       return;
     }
     if (wsMode === "new" && !newUser.new_workspace_name.trim()) {
-      setError("Naye workspace ka naam do");
+      setError("Enter a name for the new workspace.");
       return;
     }
     setSavingUser(true); setError(null);
@@ -351,7 +351,7 @@ export default function SuperAdminPanel() {
           ? { workspace_id: newUser.workspace_id, role_name: newUser.role_name }
           : { new_workspace_name: newUser.new_workspace_name.trim() }),
       });
-      setSuccess(wsMode === "new" ? "User + naya workspace dono create ho gaye! Ab plan assign karo." : "User create ho gaya! Ab plan assign karo.");
+      setSuccess(wsMode === "new" ? "User and new workspace created! Now assign a plan." : "User created! Now assign a plan.");
       setAddUserOpen(false);
       setNewUser({ full_name: "", email: "", password: "", workspace_id: "", role_name: "", new_workspace_name: "" });
       setWsMode("existing");
@@ -380,11 +380,11 @@ export default function SuperAdminPanel() {
   const assignWorkspaceToUser = async () => {
     if (!assignWsUser) return;
     if (assignWsMode === "existing" && (!assignWsForm.workspace_id || !assignWsForm.role_name)) {
-      setError("Workspace aur Role dono select karo");
+      setError("Select both a Workspace and a Role.");
       return;
     }
     if (assignWsMode === "new" && !assignWsForm.new_workspace_name.trim()) {
-      setError("Naye workspace ka naam do");
+      setError("Enter a name for the new workspace.");
       return;
     }
     setAssigningWs(true); setError(null);
@@ -394,7 +394,7 @@ export default function SuperAdminPanel() {
           ? { workspace_id: assignWsForm.workspace_id, role_name: assignWsForm.role_name }
           : { new_workspace_name: assignWsForm.new_workspace_name.trim() }
       );
-      setSuccess(`${assignWsUser.email} ab workspace mein add ho gaya — ab login kar payega!`);
+      setSuccess(`${assignWsUser.email} has been added to the workspace — they can now log in!`);
       setAssignWsUser(null);
       setAssignWsForm({ workspace_id: "", role_name: "", new_workspace_name: "" });
       setAssignWsMode("existing");
@@ -442,7 +442,7 @@ export default function SuperAdminPanel() {
           <span className="hidden text-gray-400 sm:inline">{me?.email}</span>
           <button
             onClick={handleLogout}
-            className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-gray-300 hover:bg-white/10"
+            className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-gray-300 hover:bg-card/10"
           >
             <LogOut className="h-4 w-4" /> Logout
           </button>
@@ -456,7 +456,7 @@ export default function SuperAdminPanel() {
         {/* Stats */}
         <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
           {stats.map((s) => (
-            <div key={s.label} className="flex items-center gap-3 rounded-xl border border-border bg-white p-4">
+            <div key={s.label} className="flex items-center gap-3 rounded-xl border border-border bg-card p-4">
               <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 <s.icon className="h-5 w-5" />
               </span>
@@ -470,7 +470,7 @@ export default function SuperAdminPanel() {
 
         {/* Plan distribution + recent signups */}
         <div className="mb-6 grid gap-3 lg:grid-cols-2">
-          <div className="rounded-xl border border-border bg-white p-4">
+          <div className="rounded-xl border border-border bg-card p-4">
             <p className="mb-3 text-sm font-semibold">Plan Distribution</p>
             {Object.keys(planCounts).length === 0 ? (
               <p className="text-sm text-muted-foreground">No workspaces</p>
@@ -492,7 +492,7 @@ export default function SuperAdminPanel() {
               </div>
             )}
           </div>
-          <div className="rounded-xl border border-border bg-white p-4">
+          <div className="rounded-xl border border-border bg-card p-4">
             <p className="mb-3 flex items-center gap-1.5 text-sm font-semibold">
               <UserPlus className="h-4 w-4 text-primary" /> Recent Signups
             </p>
@@ -518,7 +518,7 @@ export default function SuperAdminPanel() {
 
         {/* Tabs + search */}
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex rounded-lg border border-border bg-white p-0.5">
+          <div className="flex rounded-lg border border-border bg-card p-0.5">
             {([["workspaces", "Workspaces"], ["users", "Users"], ["leads", "Demo Requests"]] as const).map(([t, label]) => (
               <button
                 key={t}
@@ -530,7 +530,7 @@ export default function SuperAdminPanel() {
               >
                 {label}
                 {t === "leads" && newLeadCount > 0 && (
-                  <span className={cn("rounded-full px-1.5 text-xs font-bold", tab === t ? "bg-white/25" : "bg-red-100 text-red-600")}>
+                  <span className={cn("rounded-full px-1.5 text-xs font-bold", tab === t ? "bg-card/25" : "bg-red-100 text-red-600")}>
                     {newLeadCount}
                   </span>
                 )}
@@ -554,7 +554,7 @@ export default function SuperAdminPanel() {
 
         {/* Workspaces table */}
         {tab === "workspaces" && (
-          <div className="rounded-lg border border-border bg-white">
+          <div className="rounded-lg border border-border bg-card">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="border-b border-border text-xs uppercase text-muted-foreground">
@@ -607,7 +607,7 @@ export default function SuperAdminPanel() {
 
         {/* Users table */}
         {tab === "users" && (
-          <div className="rounded-lg border border-border bg-white">
+          <div className="rounded-lg border border-border bg-card">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="border-b border-border text-xs uppercase text-muted-foreground">
@@ -659,7 +659,7 @@ export default function SuperAdminPanel() {
                               size="sm"
                               onClick={() => loginAsUser(u.id, u.email)}
                               disabled={impersonating === u.id}
-                              title="Is user ke roop mein login karo (support/debugging ke liye)"
+                              title="Log in as this user (for support/debugging)"
                             >
                               <LogIn className="h-3.5 w-3.5" />
                               {impersonating === u.id ? "..." : "Login as"}
@@ -671,7 +671,7 @@ export default function SuperAdminPanel() {
                               size="sm"
                               onClick={() => setAssignWsUser(u)}
                               className="text-amber-600 hover:bg-amber-50"
-                              title="Is user ke paas koi workspace nahi hai — bina workspace ke yeh login karne ke baad stuck ho jaayega"
+                              title="This user has no workspace — without one, they'll get stuck after logging in"
                             >
                               <AlertTriangle className="h-3.5 w-3.5" /> Fix: No Workspace
                             </Button>
@@ -691,7 +691,7 @@ export default function SuperAdminPanel() {
 
         {/* Demo Requests table */}
         {tab === "leads" && (
-          <div className="rounded-lg border border-border bg-white">
+          <div className="rounded-lg border border-border bg-card">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="border-b border-border text-xs uppercase text-muted-foreground">
@@ -762,7 +762,7 @@ export default function SuperAdminPanel() {
       <Dialog open={addUserOpen} onClose={() => setAddUserOpen(false)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Naya User Add Karo</DialogTitle>
+            <DialogTitle>Add New User</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
@@ -792,16 +792,16 @@ export default function SuperAdminPanel() {
               />
             </div>
             <div className="rounded-lg border border-border p-3">
-              <p className="mb-2 text-xs font-medium text-muted-foreground">Workspace * (zaroori)</p>
+              <p className="mb-2 text-xs font-medium text-muted-foreground">Workspace * (required)</p>
               <div className="mb-2 flex rounded-lg border border-border bg-muted p-0.5">
-                {([["existing", "Existing Workspace"], ["new", "Naya Workspace Banao"]] as const).map(([id, label]) => (
+                {([["existing", "Existing Workspace"], ["new", "Create New Workspace"]] as const).map(([id, label]) => (
                   <button
                     key={id}
                     type="button"
                     onClick={() => setWsMode(id)}
                     className={cn(
                       "flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
-                      wsMode === id ? "bg-white shadow-sm" : "text-muted-foreground"
+                      wsMode === id ? "bg-card shadow-sm" : "text-muted-foreground"
                     )}
                   >
                     {label}
@@ -815,7 +815,7 @@ export default function SuperAdminPanel() {
                     value={newUser.workspace_id}
                     onChange={(e) => setNewUser({ ...newUser, workspace_id: e.target.value })}
                   >
-                    <option value="">Workspace select karo *</option>
+                    <option value="">Select a workspace *</option>
                     {wsRows.map((w) => (
                       <option key={w.id} value={w.id}>{w.name}</option>
                     ))}
@@ -825,7 +825,7 @@ export default function SuperAdminPanel() {
                     onChange={(e) => setNewUser({ ...newUser, role_name: e.target.value })}
                     disabled={!newUser.workspace_id}
                   >
-                    <option value="">Role select karo *</option>
+                    <option value="">Select a role *</option>
                     {roles.map((r) => (
                       <option key={r.id} value={r.name}>{r.name}</option>
                     ))}
@@ -836,10 +836,10 @@ export default function SuperAdminPanel() {
                   <Input
                     value={newUser.new_workspace_name}
                     onChange={(e) => setNewUser({ ...newUser, new_workspace_name: e.target.value })}
-                    placeholder="Naye workspace ka naam (jaise: Rahul's Business)"
+                    placeholder="New workspace name (e.g. Rahul's Business)"
                   />
                   <p className="mt-1.5 text-[10px] text-muted-foreground">
-                    User is naye workspace ka <strong>owner + Admin</strong> banega
+                    The user will be the <strong>owner + Admin</strong> of this new workspace
                   </p>
                 </div>
               )}
@@ -858,21 +858,21 @@ export default function SuperAdminPanel() {
       <Dialog open={assignWsUser !== null} onClose={() => setAssignWsUser(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Workspace Assign Karo</DialogTitle>
+            <DialogTitle>Assign Workspace</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <p className="text-sm text-muted-foreground">
-              <strong>{assignWsUser?.email}</strong> ke paas abhi koi workspace nahi hai — isliye yeh login karne ke baad stuck ho jaata hai.
+              <strong>{assignWsUser?.email}</strong> doesn&apos;t have a workspace yet — so they get stuck after logging in.
             </p>
             <div className="flex rounded-lg border border-border bg-muted p-0.5">
-              {([["existing", "Existing Workspace"], ["new", "Naya Workspace Banao"]] as const).map(([id, label]) => (
+              {([["existing", "Existing Workspace"], ["new", "Create New Workspace"]] as const).map(([id, label]) => (
                 <button
                   key={id}
                   type="button"
                   onClick={() => setAssignWsMode(id)}
                   className={cn(
                     "flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
-                    assignWsMode === id ? "bg-white shadow-sm" : "text-muted-foreground"
+                    assignWsMode === id ? "bg-card shadow-sm" : "text-muted-foreground"
                   )}
                 >
                   {label}
@@ -887,7 +887,7 @@ export default function SuperAdminPanel() {
                     value={assignWsForm.workspace_id}
                     onChange={(e) => setAssignWsForm({ ...assignWsForm, workspace_id: e.target.value })}
                   >
-                    <option value="">Workspace select karo</option>
+                    <option value="">Select a workspace</option>
                     {wsRows.map((w) => (
                       <option key={w.id} value={w.id}>{w.name}</option>
                     ))}
@@ -899,7 +899,7 @@ export default function SuperAdminPanel() {
                     value={assignWsForm.role_name}
                     onChange={(e) => setAssignWsForm({ ...assignWsForm, role_name: e.target.value })}
                   >
-                    <option value="">Role select karo</option>
+                    <option value="">Select a role</option>
                     {roles.map((r) => (
                       <option key={r.id} value={r.name}>{r.name}</option>
                     ))}
@@ -908,13 +908,13 @@ export default function SuperAdminPanel() {
               </>
             ) : (
               <div className="space-y-1.5">
-                <Label>Naye Workspace ka Naam</Label>
+                <Label>New Workspace Name</Label>
                 <Input
                   value={assignWsForm.new_workspace_name}
                   onChange={(e) => setAssignWsForm({ ...assignWsForm, new_workspace_name: e.target.value })}
-                  placeholder="jaise: Rahul's Business"
+                  placeholder="e.g. Rahul's Business"
                 />
-                <p className="text-[10px] text-muted-foreground">User is naye workspace ka owner + Admin banega</p>
+                <p className="text-[10px] text-muted-foreground">The user will be the owner + Admin of this new workspace</p>
               </div>
             )}
           </div>
@@ -947,7 +947,7 @@ export default function SuperAdminPanel() {
             {([["assign", "Assign / Change Plan"], ["edit", "Manual Edit"]] as const).map(([id, label]) => (
               <button
                 key={id} type="button" onClick={() => setPlanTab(id)}
-                className={cn("flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors", planTab === id ? "bg-white shadow-sm" : "text-muted-foreground")}
+                className={cn("flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors", planTab === id ? "bg-card shadow-sm" : "text-muted-foreground")}
               >
                 {label}
               </button>

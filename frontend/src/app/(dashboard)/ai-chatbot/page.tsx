@@ -12,6 +12,7 @@ import { useWorkspaceWebSocket } from "@/hooks/shared/use-workspace-ws";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -59,9 +60,9 @@ const PROVIDERS = [
 ];
 
 const MODES = [
-  { id: "platform", title: "Platform AI", desc: "Deenx AI credits use hote hain — apni key ki zarurat nahi" },
-  { id: "hybrid", title: "Hybrid AI", desc: "Apni API key + platform features dono" },
-  { id: "strict", title: "Strict Own AI", desc: "Sirf aapki API key — full control" },
+  { id: "platform", title: "Platform AI", desc: "Uses Deenx AI credits — no API key of your own needed" },
+  { id: "hybrid", title: "Hybrid AI", desc: "Your own API key plus platform features" },
+  { id: "strict", title: "Strict Own AI", desc: "Only your API key — full control" },
 ];
 
 const TEST_LABELS: Record<string, { label: string; ok: boolean }> = {
@@ -80,38 +81,38 @@ const HEALTH_LABELS: Record<string, string> = {
 };
 
 const ERROR_TABS: { key: string; label: string; desc: string }[] = [
-  { key: "429", label: "429 Rate Limit", desc: "Jab bahut zyada requests aa rahi hon" },
-  { key: "timeout", label: "Timeout", desc: "Provider response slow ho" },
-  { key: "provider_down", label: "Provider Down", desc: "AI provider unavailable ho" },
+  { key: "429", label: "429 Rate Limit", desc: "When too many requests come in" },
+  { key: "timeout", label: "Timeout", desc: "When the provider is slow to respond" },
+  { key: "provider_down", label: "Provider Down", desc: "When the AI provider is unavailable" },
   { key: "network", label: "Network Error", desc: "Connection issue" },
   { key: "maintenance", label: "Maintenance", desc: "Planned downtime" },
-  { key: "unknown", label: "Unknown", desc: "Koi bhi anjaan error" },
+  { key: "unknown", label: "Unknown", desc: "Any unrecognized error" },
 ];
 
 const TOOL_META: { key: string; label: string; desc: string }[] = [
-  { key: "generate_itinerary_pdf", label: "Generate Itinerary PDF", desc: "Travel plan PDF banake WhatsApp pe bhejna" },
-  { key: "generate_quotation_pdf", label: "Generate Quotation PDF", desc: "Price quotation PDF banake WhatsApp pe bhejna" },
-  { key: "search_product", label: "Search Product", desc: "Catalogue mein products dhundhna" },
+  { key: "generate_itinerary_pdf", label: "Generate Itinerary PDF", desc: "Create a travel plan PDF and send it on WhatsApp" },
+  { key: "generate_quotation_pdf", label: "Generate Quotation PDF", desc: "Create a price quotation PDF and send it on WhatsApp" },
+  { key: "search_product", label: "Search Product", desc: "Find products in the catalogue" },
   { key: "search_customer", label: "Search Customer", desc: "Contact records access" },
-  { key: "search_orders", label: "Search Orders", desc: "Order history dekhna" },
-  { key: "create_order", label: "Create Order", desc: "Naya order banana" },
-  { key: "cancel_order", label: "Cancel Order", desc: "Order cancel karna" },
-  { key: "refund", label: "Refund", desc: "Refund initiate karna" },
-  { key: "payment_link", label: "Payment Link", desc: "Payment link bhejna" },
-  { key: "book_appointment", label: "Book Appointment", desc: "Appointment request note karna (human confirm karta hai)" },
-  { key: "crm_update", label: "CRM Update", desc: "Tags/leads update karna" },
+  { key: "search_orders", label: "Search Orders", desc: "View order history" },
+  { key: "create_order", label: "Create Order", desc: "Create a new order" },
+  { key: "cancel_order", label: "Cancel Order", desc: "Cancel an order" },
+  { key: "refund", label: "Refund", desc: "Initiate a refund" },
+  { key: "payment_link", label: "Payment Link", desc: "Send a payment link" },
+  { key: "book_appointment", label: "Book Appointment", desc: "Note an appointment request (a human confirms it)" },
+  { key: "crm_update", label: "CRM Update", desc: "Update tags and leads" },
   { key: "webhook", label: "Webhook", desc: "External webhook trigger" },
   { key: "api_request", label: "API Request", desc: "Custom API calls" },
-  { key: "human_handoff", label: "Human Handoff", desc: "Chat human ko transfer" },
-  { key: "send_whatsapp", label: "Send WhatsApp", desc: "WhatsApp messages bhejna" },
-  { key: "send_email", label: "Send Email", desc: "Email bhejna" },
+  { key: "human_handoff", label: "Human Handoff", desc: "Transfer the chat to a human" },
+  { key: "send_whatsapp", label: "Send WhatsApp", desc: "Send WhatsApp messages" },
+  { key: "send_email", label: "Send Email", desc: "Send emails" },
 ];
 
 const SECURITY_META: { key: string; label: string; desc: string }[] = [
   { key: "prompt_injection_protection", label: "Prompt Injection Protection", desc: "Malicious prompts block" },
   { key: "jailbreak_detection", label: "Jailbreak Detection", desc: "Bypass attempts detect" },
   { key: "pii_masking", label: "PII Masking", desc: "Personal info mask in logs" },
-  { key: "audit_logs", label: "Audit Logs", desc: "Har action logged" },
+  { key: "audit_logs", label: "Audit Logs", desc: "Every action logged" },
   { key: "content_moderation", label: "Content Moderation", desc: "Unsafe content filter" },
   { key: "rate_limiting", label: "Rate Limiting", desc: "Per-user request limits" },
 ];
@@ -178,7 +179,7 @@ export default function AiChatbotPage() {
 
   const uploadPhoto = async () => {
     if (!photoTag.trim() || !photoFile) {
-      setError("Tag aur photo dono chahiye");
+      setError("Both a tag and a photo are required.");
       return;
     }
     setPhotoUploading(true); setError(null);
@@ -187,7 +188,7 @@ export default function AiChatbotPage() {
       form.append("tag", photoTag.trim());
       form.append("file", photoFile);
       await api.post("/ai-hub/photos", form, { headers: { "Content-Type": "multipart/form-data" } });
-      setSuccess("Photo add ho gayi!");
+      setSuccess("Photo added!");
       setPhotoTag(""); setPhotoFile(null);
       await loadPhotos();
     } catch (e: unknown) {
@@ -198,7 +199,7 @@ export default function AiChatbotPage() {
   };
 
   const deletePhoto = async (id: string) => {
-    if (!confirm("Yeh photo hatani hai?")) return;
+    if (!confirm("Remove this photo?")) return;
     try {
       await api.delete(`/ai-hub/photos/${id}`);
       await loadPhotos();
@@ -235,7 +236,7 @@ export default function AiChatbotPage() {
     setKbBusy(true); setError(null);
     try {
       await api.post("/ai-hub/knowledge/crawl", { url: crawlUrl.trim(), max_pages: maxPages });
-      setSuccess("Crawl started! Progress neeche live dikhega.");
+      setSuccess("Crawl started! Live progress appears below.");
       await loadKb();
     } catch (e: unknown) {
       setError(getErrorMessage(e, "Crawl start failed"));
@@ -265,7 +266,7 @@ export default function AiChatbotPage() {
       setSuccess("Knowledge added!");
       setQaTitle(""); setQaContent("");
       await loadKb();
-    } catch { setError("Add failed — OPENAI_API_KEY backend mein set hai?"); }
+    } catch { setError("Add failed — is OPENAI_API_KEY set on the backend?"); }
     finally { setKbBusy(false); }
   };
 
@@ -311,7 +312,7 @@ export default function AiChatbotPage() {
     if (!s) return;
     const nextTools = { ...s.tools, [key]: val };
     setS({ ...s, tools: nextTools });
-    await patch({ tools: nextTools }, val ? "Tool enabled — AI ab use kar sakta hai" : "Tool disabled");
+    await patch({ tools: nextTools }, val ? "Tool enabled — the AI can now use it" : "Tool disabled");
   };
 
   const toggleSecurity = async (key: string, val: boolean) => {
@@ -322,12 +323,12 @@ export default function AiChatbotPage() {
   };
 
   const flushMemoryCache = async () => {
-    if (!confirm("Redis conversation memory delete hogi (Vector DB/knowledge safe rahegi). Continue?")) return;
+    if (!confirm("This will delete Redis conversation memory (Vector DB / knowledge stays safe). Continue?")) return;
     setFlushing(true);
     try {
       const { data } = await api.post<{ keys_deleted: number }>("/ai-hub/memory/flush");
       setSuccess(`Memory flushed — ${data.keys_deleted} keys deleted`);
-    } catch { setError("Flush failed — Redis check karo"); }
+    } catch { setError("Flush failed — please check Redis."); }
     finally { setFlushing(false); }
   };
 
@@ -359,7 +360,7 @@ export default function AiChatbotPage() {
       ]);
       setOverview(o.data);
       setS(st.data);
-    } catch { setError("AI Hub load nahi hua — backend check karo"); }
+    } catch { setError("Couldn't load the AI Hub — please check the backend."); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -452,7 +453,7 @@ export default function AiChatbotPage() {
           <div className="space-y-4">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {/* Status card */}
-              <button onClick={() => setTab("provider")} className="rounded-xl border border-border bg-white p-4 text-left transition-shadow hover:shadow-md">
+              <button onClick={() => setTab("provider")} className="rounded-xl border border-border bg-card p-4 text-left transition-shadow hover:shadow-md">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary"><Bot className="h-4.5 w-4.5 h-[18px] w-[18px]" /></span>
                   <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize", statusColor)}>
@@ -464,14 +465,14 @@ export default function AiChatbotPage() {
               </button>
 
               {/* Model card */}
-              <button onClick={() => setTab("provider")} className="rounded-xl border border-border bg-white p-4 text-left transition-shadow hover:shadow-md">
+              <button onClick={() => setTab("provider")} className="rounded-xl border border-border bg-card p-4 text-left transition-shadow hover:shadow-md">
                 <span className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg bg-violet-100 text-violet-600"><Cpu className="h-[18px] w-[18px]" /></span>
                 <p className="text-sm font-semibold">Current Model</p>
                 <p className="truncate text-xs text-muted-foreground">{overview?.provider} · {overview?.model}</p>
               </button>
 
               {/* Actions card */}
-              <div className="rounded-xl border border-border bg-white p-4">
+              <div className="rounded-xl border border-border bg-card p-4">
                 <span className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100 text-blue-600"><Zap className="h-[18px] w-[18px]" /></span>
                 <p className="text-sm font-semibold">AI Actions</p>
                 <p className="text-xs text-muted-foreground">
@@ -484,7 +485,7 @@ export default function AiChatbotPage() {
               </div>
 
               {/* Tokens card */}
-              <div className="rounded-xl border border-border bg-white p-4">
+              <div className="rounded-xl border border-border bg-card p-4">
                 <span className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 text-amber-600"><DollarSign className="h-[18px] w-[18px]" /></span>
                 <p className="text-sm font-semibold">Token Usage (30d)</p>
                 <p className="text-xs text-muted-foreground">
@@ -498,7 +499,7 @@ export default function AiChatbotPage() {
             </div>
 
             {/* Health grid */}
-            <div className="rounded-xl border border-border bg-white p-4">
+            <div className="rounded-xl border border-border bg-card p-4">
               <div className="mb-3 flex items-center justify-between">
                 <p className="flex items-center gap-1.5 text-sm font-semibold"><Activity className="h-4 w-4 text-primary" /> System Health</p>
                 <Button variant="outline" size="sm" onClick={load}><RefreshCw className="h-3.5 w-3.5" /> Refresh</Button>
@@ -550,11 +551,11 @@ export default function AiChatbotPage() {
             </div>
 
             {s.mode === "platform" ? (
-              <div className="rounded-xl border border-border bg-white p-5">
+              <div className="rounded-xl border border-border bg-card p-5">
                 <p className="mb-1 text-sm font-semibold">Platform AI Active</p>
                 <p className="text-sm text-muted-foreground">
-                  Deenx AI platform credits use ho rahe hain. Apni API key ki zarurat nahi.
-                  Is month: <span className="font-semibold">{overview?.usage.month.requests ?? 0} requests</span> ·
+                  Using Deenx AI platform credits — no API key of your own needed.
+                  This month: <span className="font-semibold">{overview?.usage.month.requests ?? 0} requests</span> ·
                   <span className="font-semibold"> {(overview?.tokens.total ?? 0).toLocaleString()} tokens</span>
                 </p>
                 <Button className="mt-4" onClick={() => patch({ mode: "platform" }, "Platform AI activated!")} disabled={saving}>
@@ -562,7 +563,7 @@ export default function AiChatbotPage() {
                 </Button>
               </div>
             ) : (
-              <div className="space-y-4 rounded-xl border border-border bg-white p-5">
+              <div className="space-y-4 rounded-xl border border-border bg-card p-5">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label>Provider</Label>
@@ -586,9 +587,9 @@ export default function AiChatbotPage() {
                     type="password"
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
-                    placeholder={s.has_api_key ? `Saved: ${s.api_key_masked} — nayi key daalo replace ke liye` : "sk-..."}
+                    placeholder={s.has_api_key ? `Saved: ${s.api_key_masked} — enter a new key to replace it` : "sk-..."}
                   />
-                  <p className="text-xs text-muted-foreground">Key encrypt hokar store hoti hai (Fernet AES-128). Kabhi plain text mein save nahi hoti.</p>
+                  <p className="text-xs text-muted-foreground">The key is encrypted at rest (Fernet AES-128). It&apos;s never stored in plain text.</p>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -650,7 +651,7 @@ export default function AiChatbotPage() {
         {tab === "settings" && s && (
           <div className="max-w-3xl space-y-5">
             {/* Master switch */}
-            <div className="flex items-center justify-between rounded-xl border border-border bg-white p-5">
+            <div className="flex items-center justify-between rounded-xl border border-border bg-card p-5">
               <div>
                 <p className="text-sm font-semibold">AI Master Switch</p>
                 <p className="text-xs text-muted-foreground">
@@ -668,7 +669,7 @@ export default function AiChatbotPage() {
               <div>
                 <p className="font-semibold">Business Category</p>
                 <p className="text-sm text-muted-foreground">
-                  Apna business type select karo — AI automatically us industry ka expert ban jaayega aur relevant tools suggest karega.
+                  Select your business type — the AI automatically becomes an expert in that industry and suggests relevant tools.
                 </p>
               </div>
               <Select
@@ -676,7 +677,7 @@ export default function AiChatbotPage() {
                 onChange={(e) => setS({ ...s, business_category: e.target.value || null })}
                 className="max-w-md"
               >
-                <option value="">Select karo...</option>
+                <option value="">Select...</option>
                 {categories.map((c) => (
                   <option key={c.key} value={c.key}>{c.label}</option>
                 ))}
@@ -685,9 +686,9 @@ export default function AiChatbotPage() {
                 const cat = categories.find((c) => c.key === s.business_category);
                 if (!cat) return null;
                 return (
-                  <div className="rounded-lg bg-white p-3 text-xs">
+                  <div className="rounded-lg bg-card p-3 text-xs">
                     <p className="mb-1.5 font-medium text-muted-foreground">
-                      {cat.label} ke liye recommended tools (Tools tab mein enable karo):
+                      Recommended tools for {cat.label} (enable them in the Tools tab):
                     </p>
                     <div className="flex flex-wrap gap-1.5">
                       {cat.suggested_tools.map((t) => (
@@ -710,7 +711,7 @@ export default function AiChatbotPage() {
             </div>
 
             {/* Assistant persona */}
-            <div className="space-y-4 rounded-xl border border-border bg-white p-5">
+            <div className="space-y-4 rounded-xl border border-border bg-card p-5">
               <div className="grid gap-4 sm:grid-cols-3">
                 <div className="space-y-1.5">
                   <Label>Assistant Name</Label>
@@ -735,12 +736,12 @@ export default function AiChatbotPage() {
                   <Label>System Prompt</Label>
                   <span className="text-xs text-muted-foreground">~{Math.ceil(s.system_prompt.length / 4)} tokens</span>
                 </div>
-                <textarea
+                <Textarea
                   value={s.system_prompt}
                   onChange={(e) => setS({ ...s, system_prompt: e.target.value })}
                   rows={8}
-                  placeholder="Tum Deenx AI ki sales assistant ho. Customer se Hinglish mein friendly baat karo..."
-                  className="w-full resize-y rounded-md border border-border px-3 py-2 font-mono text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  placeholder="You are Deenx AI's sales assistant. Chat with customers in a friendly, conversational tone…"
+                  className="resize-y font-mono"
                 />
               </div>
 
@@ -803,7 +804,7 @@ export default function AiChatbotPage() {
                 { icon: FileText, label: "Sources", value: Object.keys(kbStats?.by_type || {}).length },
                 { icon: RefreshCw, label: "Last Sync", value: kbStats?.last_sync ? new Date(kbStats.last_sync).toLocaleDateString("en-IN") : "—" },
               ].map((s) => (
-                <div key={s.label} className="flex items-center gap-3 rounded-xl border border-border bg-white p-4">
+                <div key={s.label} className="flex items-center gap-3 rounded-xl border border-border bg-card p-4">
                   <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary"><s.icon className="h-[18px] w-[18px]" /></span>
                   <span>
                     <span className="block text-lg font-bold leading-tight">{s.value}</span>
@@ -832,9 +833,9 @@ export default function AiChatbotPage() {
 
             <div className="grid gap-4 lg:grid-cols-2">
               {/* Website crawler */}
-              <div className="space-y-3 rounded-xl border border-border bg-white p-5">
+              <div className="space-y-3 rounded-xl border border-border bg-card p-5">
                 <p className="flex items-center gap-1.5 text-sm font-semibold"><Globe className="h-4 w-4 text-primary" /> Business Website</p>
-                <p className="text-xs text-muted-foreground">URL daalo — crawler pages nikalega, duplicate hatayega, chunks banakar embeddings PGVector mein store karega.</p>
+                <p className="text-xs text-muted-foreground">Enter a URL — the crawler fetches the pages, removes duplicates, splits them into chunks, and stores the embeddings in PGVector.</p>
                 <Input value={crawlUrl} onChange={(e) => setCrawlUrl(e.target.value)} placeholder="https://yourbusiness.com" />
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2 text-sm">
@@ -848,7 +849,7 @@ export default function AiChatbotPage() {
               </div>
 
               {/* File upload */}
-              <div className="space-y-3 rounded-xl border border-border bg-white p-5">
+              <div className="space-y-3 rounded-xl border border-border bg-card p-5">
                 <p className="flex items-center gap-1.5 text-sm font-semibold"><Upload className="h-4 w-4 text-primary" /> Upload Document</p>
                 <p className="text-xs text-muted-foreground">PDF, DOCX, TXT, CSV, MD — max 20 MB. Extract → chunk → embed → store.</p>
                 <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border p-6 text-center hover:border-primary/50">
@@ -861,21 +862,21 @@ export default function AiChatbotPage() {
             </div>
 
             {/* Manual QA */}
-            <div className="space-y-3 rounded-xl border border-border bg-white p-5">
+            <div className="space-y-3 rounded-xl border border-border bg-card p-5">
               <p className="flex items-center gap-1.5 text-sm font-semibold"><Plus className="h-4 w-4 text-primary" /> Manual Knowledge / FAQ</p>
               <Input value={qaTitle} onChange={(e) => setQaTitle(e.target.value)} placeholder="Title (e.g. Refund Policy)" />
               <textarea
                 value={qaContent}
                 onChange={(e) => setQaContent(e.target.value)}
                 rows={3}
-                placeholder="Q: Refund kaise milega? A: 7 din ke andar..."
+                placeholder="Q: How do refunds work? A: Within 7 days…"
                 className="w-full resize-y rounded-md border border-border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               />
               <Button size="sm" onClick={addManualQa} disabled={kbBusy || !qaContent.trim()}>Add Knowledge</Button>
             </div>
 
             {/* Docs table + actions */}
-            <div className="rounded-xl border border-border bg-white">
+            <div className="rounded-xl border border-border bg-card">
               <div className="flex items-center justify-between border-b border-border px-4 py-3">
                 <p className="text-sm font-semibold">Knowledge Documents ({kbDocs.length})</p>
                 <div className="flex gap-2">
@@ -885,7 +886,7 @@ export default function AiChatbotPage() {
               </div>
               <div className="max-h-80 overflow-y-auto">
                 <table className="w-full text-left text-sm">
-                  <thead className="sticky top-0 border-b border-border bg-white text-xs uppercase text-muted-foreground">
+                  <thead className="sticky top-0 border-b border-border bg-card text-xs uppercase text-muted-foreground">
                     <tr>
                       <th className="px-4 py-2.5">Title</th>
                       <th className="px-4 py-2.5">Source</th>
@@ -905,7 +906,7 @@ export default function AiChatbotPage() {
                       </tr>
                     ))}
                     {kbDocs.length === 0 && (
-                      <tr><td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">Knowledge base khali hai — website crawl karo ya file upload karo!</td></tr>
+                      <tr><td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">Your knowledge base is empty — crawl a website or upload a file to get started.</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -916,15 +917,15 @@ export default function AiChatbotPage() {
         {/* ═══ PHOTO LIBRARY (Option 1: business's own itinerary photos) ═══ */}
         {tab === "photos" && (
           <div className="space-y-4">
-            <div className="rounded-xl border border-border bg-white p-5">
+            <div className="rounded-xl border border-border bg-card p-5">
               <p className="font-semibold">Photo Library</p>
               <p className="mb-4 text-sm text-muted-foreground">
-                Apni khud ki destination/property photos upload karo — jab AI itinerary banayega, pehle yahan se matching photo dhundega
-                (tag se match karke), tabhi Unsplash try karega. Tag mein destination/jagah ka naam likho (jaise &quot;Kashmir Dal Lake Houseboat&quot;).
+                Upload your own destination/property photos — when the AI builds an itinerary, it first looks here for a matching photo
+                (by tag) before trying Unsplash. Use the destination or place name as the tag (e.g. &quot;Kashmir Dal Lake Houseboat&quot;).
               </p>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                 <div className="flex-1 space-y-1.5">
-                  <Label>Tag (destination/jagah ka naam)</Label>
+                  <Label>Tag (destination or place name)</Label>
                   <Input value={photoTag} onChange={(e) => setPhotoTag(e.target.value)} placeholder="Kashmir Dal Lake Houseboat" />
                 </div>
                 <div className="flex-1 space-y-1.5">
@@ -943,7 +944,7 @@ export default function AiChatbotPage() {
 
             <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {photos.map((p) => (
-                <div key={p.id} className="overflow-hidden rounded-xl border border-border bg-white">
+                <div key={p.id} className="overflow-hidden rounded-xl border border-border bg-card">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={photoBlobUrls[p.id] || ""} alt={p.tag} className="h-28 w-full bg-muted object-cover" />
                   <div className="p-2.5">
@@ -957,7 +958,7 @@ export default function AiChatbotPage() {
               ))}
               {photos.length === 0 && (
                 <p className="col-span-full py-8 text-center text-sm text-muted-foreground">
-                  Koi photo abhi tak upload nahi hui — upar se add karo.
+                  No photos uploaded yet — add one above.
                 </p>
               )}
             </div>
@@ -983,19 +984,19 @@ export default function AiChatbotPage() {
                 ))}
               </div>
 
-              <div className="space-y-3 rounded-xl border border-border bg-white p-5">
+              <div className="space-y-3 rounded-xl border border-border bg-card p-5">
                 <div>
                   <p className="flex items-center gap-1.5 text-sm font-semibold">
                     <AlertTriangle className="h-4 w-4 text-amber-500" />
                     {ERROR_TABS.find((e) => e.key === errorTab)?.label}
                   </p>
-                  <p className="text-xs text-muted-foreground">{ERROR_TABS.find((e) => e.key === errorTab)?.desc} — customer ko yeh message dikhega</p>
+                  <p className="text-xs text-muted-foreground">{ERROR_TABS.find((e) => e.key === errorTab)?.desc} — this message is shown to the customer</p>
                 </div>
-                <textarea
+                <Textarea
                   value={s.error_responses?.[errorTab] || ""}
                   onChange={(e) => setErrorResponse(errorTab, e.target.value)}
                   rows={4}
-                  className="w-full resize-y rounded-md border border-border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="resize-y"
                   placeholder="Customer-friendly error message..."
                 />
                 <div className="flex gap-2">
@@ -1018,7 +1019,7 @@ export default function AiChatbotPage() {
                       onClick={() => setPreviewChannel(ch)}
                       className={cn(
                         "rounded-md px-2 py-1 text-[10px] font-semibold uppercase",
-                        previewChannel === ch ? "bg-primary text-white" : "bg-white text-muted-foreground"
+                        previewChannel === ch ? "bg-primary text-white" : "bg-card text-muted-foreground"
                       )}
                     >
                       {ch === "whatsapp" ? "WA" : ch === "livechat" ? "Chat" : "Email"}
@@ -1035,7 +1036,7 @@ export default function AiChatbotPage() {
                 {/* Bot error reply */}
                 <div className={cn(
                   "max-w-[85%] rounded-lg px-3 py-2 text-xs text-gray-800 shadow-sm whitespace-pre-wrap",
-                  previewChannel === "email" ? "bg-gray-50 border border-gray-200 rounded-md" : "rounded-tl-none bg-white"
+                  previewChannel === "email" ? "bg-gray-50 border border-gray-200 rounded-md" : "rounded-tl-none bg-card"
                 )}>
                   {previewChannel === "email" && <p className="mb-1 border-b border-gray-200 pb-1 text-[10px] font-semibold text-gray-500">Subject: Re: Your query</p>}
                   {s.error_responses?.[errorTab] || "..."}
@@ -1050,11 +1051,11 @@ export default function AiChatbotPage() {
         {/* ═══ TOOLS & PERMISSIONS ═══ */}
         {tab === "tools" && s && (
           <div className="space-y-4">
-            <div className="flex items-center gap-2 rounded-xl border border-border bg-white p-4">
+            <div className="flex items-center gap-2 rounded-xl border border-border bg-card p-4">
               <Wrench className="h-4 w-4 text-primary" />
               <p className="text-sm">
                 <span className="font-semibold">{Object.values(s.tools || {}).filter(Boolean).length} tools enabled</span>
-                <span className="text-muted-foreground"> — sirf ✅ Live tools hi real action lete hain, baaki abhi UI-only hain</span>
+                <span className="text-muted-foreground"> — only ✅ Live tools take real actions; the rest are UI-only for now</span>
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -1064,7 +1065,7 @@ export default function AiChatbotPage() {
                 const currentCat = categories.find((c) => c.key === s.business_category);
                 const isRecommended = currentCat?.suggested_tools.includes(t.key);
                 return (
-                  <div key={t.key} className={cn("flex items-start justify-between gap-3 rounded-xl border p-4 transition-colors", on ? "border-primary/40 bg-primary/[0.03]" : "border-border bg-white")}>
+                  <div key={t.key} className={cn("flex items-start justify-between gap-3 rounded-xl border p-4 transition-colors", on ? "border-primary/40 bg-primary/[0.03]" : "border-border bg-card")}>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-1.5">
                         <p className="text-sm font-semibold">{t.label}</p>
@@ -1093,7 +1094,7 @@ export default function AiChatbotPage() {
         {tab === "advanced" && s && (
           <div className="max-w-3xl space-y-5">
             {/* Memory */}
-            <div className="space-y-4 rounded-xl border border-border bg-white p-5">
+            <div className="space-y-4 rounded-xl border border-border bg-card p-5">
               <p className="flex items-center gap-1.5 text-sm font-semibold"><Brain className="h-4 w-4 text-primary" /> Memory</p>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
@@ -1119,7 +1120,7 @@ export default function AiChatbotPage() {
             </div>
 
             {/* CRM Intelligence */}
-            <div className="space-y-4 rounded-xl border border-border bg-white p-5">
+            <div className="space-y-4 rounded-xl border border-border bg-card p-5">
               <p className="flex items-center gap-1.5 text-sm font-semibold"><Zap className="h-4 w-4 text-primary" /> CRM Intelligence</p>
               <div className="space-y-1.5">
                 <Label>Confidence Threshold: <span className="font-bold text-primary">{s.crm_confidence}%</span></Label>
@@ -1143,7 +1144,7 @@ export default function AiChatbotPage() {
             </div>
 
             {/* Security */}
-            <div className="space-y-3 rounded-xl border border-border bg-white p-5">
+            <div className="space-y-3 rounded-xl border border-border bg-card p-5">
               <p className="flex items-center gap-1.5 text-sm font-semibold"><Shield className="h-4 w-4 text-primary" /> Security</p>
               <div className="grid gap-3 sm:grid-cols-2">
                 {SECURITY_META.map((sec) => {
@@ -1184,7 +1185,7 @@ export default function AiChatbotPage() {
                 { label: "Total Cost", value: `$${analytics?.total_cost_usd ?? 0}` },
                 { label: "Avg Latency", value: `${analytics?.avg_latency_ms ?? 0}ms` },
               ].map((c) => (
-                <div key={c.label} className="rounded-xl border border-border bg-white p-4 text-center">
+                <div key={c.label} className="rounded-xl border border-border bg-card p-4 text-center">
                   <p className="text-xl font-bold">{c.value}</p>
                   <p className="text-xs text-muted-foreground">{c.label}</p>
                 </div>
@@ -1193,7 +1194,7 @@ export default function AiChatbotPage() {
 
             {/* Charts */}
             <div className="grid gap-4 lg:grid-cols-2">
-              <div className="rounded-xl border border-border bg-white p-4">
+              <div className="rounded-xl border border-border bg-card p-4">
                 <p className="mb-3 text-sm font-semibold">Daily Requests</p>
                 <ResponsiveContainer width="100%" height={220}>
                   <LineChart data={analytics?.daily || []}>
@@ -1205,7 +1206,7 @@ export default function AiChatbotPage() {
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-              <div className="rounded-xl border border-border bg-white p-4">
+              <div className="rounded-xl border border-border bg-card p-4">
                 <p className="mb-3 text-sm font-semibold">Daily Tokens</p>
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={analytics?.daily || []}>
@@ -1220,7 +1221,7 @@ export default function AiChatbotPage() {
 
             {/* Top lists */}
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-xl border border-border bg-white p-4">
+              <div className="rounded-xl border border-border bg-card p-4">
                 <p className="mb-2 text-sm font-semibold">Top Models</p>
                 {(analytics?.top_models || []).length === 0 ? (
                   <p className="text-sm text-muted-foreground">No usage yet</p>
@@ -1235,7 +1236,7 @@ export default function AiChatbotPage() {
                   </div>
                 )}
               </div>
-              <div className="rounded-xl border border-border bg-white p-4">
+              <div className="rounded-xl border border-border bg-card p-4">
                 <p className="mb-2 text-sm font-semibold">Top Sources</p>
                 {(analytics?.top_sources || []).length === 0 ? (
                   <p className="text-sm text-muted-foreground">No usage yet</p>

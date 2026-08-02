@@ -1,11 +1,13 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { BookOpen, Plus, Trash2 } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
 import type { KnowledgeDocumentResponse } from "@/types/ai";
 
@@ -57,12 +59,16 @@ export function KnowledgeBaseTab() {
 
       <div className="space-y-2">
         {docs.length === 0 && (
-          <p className="rounded-lg border border-border bg-white p-6 text-center text-sm text-muted-foreground">
-            No knowledge base entries yet.
-          </p>
+          <div className="rounded-xl border border-border bg-card shadow-card">
+            <EmptyState
+              icon={BookOpen}
+              title="No knowledge base entries yet"
+              description="Add FAQs, policies, or business details so the AI can answer accurately."
+            />
+          </div>
         )}
         {docs.map((d) => (
-          <div key={d.id} className="rounded-lg border border-border bg-white p-4 flex items-start justify-between">
+          <div key={d.id} className="flex items-start justify-between rounded-xl border border-border bg-card p-4 shadow-card">
             <div>
               <p className="font-medium text-sm">{d.title || "Untitled"}</p>
               <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{d.content}</p>
@@ -83,8 +89,8 @@ export function KnowledgeBaseTab() {
           </div>
           <div className="space-y-1.5">
             <Label>Content *</Label>
-            <textarea
-              className="w-full rounded-md border border-border px-3 py-2 text-sm min-h-[140px]"
+            <Textarea
+              className="min-h-[140px]"
               placeholder="We offer full refunds within 7 days of purchase..."
               value={form.content}
               onChange={(e) => setForm(f => ({ ...f, content: e.target.value }))}

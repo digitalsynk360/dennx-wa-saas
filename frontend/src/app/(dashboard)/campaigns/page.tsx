@@ -218,7 +218,7 @@ export default function CampaignsPage() {
           return (
             <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
               {cards.map((s) => (
-                <div key={s.label} className="flex items-center gap-3 rounded-xl border border-border bg-white p-3.5">
+                <div key={s.label} className="flex items-center gap-3 rounded-xl border border-border bg-card p-3.5">
                   <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${s.cls}`}>
                     <s.icon className="h-4.5 w-4.5 h-[18px] w-[18px]" />
                   </span>
@@ -236,7 +236,7 @@ export default function CampaignsPage() {
           <Button onClick={openModal}><Plus className="h-4 w-4" /> New Campaign</Button>
         </div>
 
-        <div className="overflow-hidden rounded-lg border border-border bg-white">
+        <div className="overflow-hidden rounded-lg border border-border bg-card">
           <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="bg-muted/50 text-xs uppercase text-muted-foreground border-b border-border">
@@ -317,7 +317,7 @@ export default function CampaignsPage() {
       {/* ── Campaign Detail Modal (per-recipient status) ── */}
       {detailId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-6">
-          <div className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+          <div className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-card shadow-2xl">
             <div className="flex flex-shrink-0 items-center justify-between border-b border-border px-5 py-3.5">
               <div>
                 <h2 className="font-semibold">{detail?.name || "Campaign"}</h2>
@@ -348,7 +348,7 @@ export default function CampaignsPage() {
                 <p className="py-10 text-center text-muted-foreground">Loading...</p>
               ) : (
                 <table className="w-full text-left text-sm">
-                  <thead className="sticky top-0 border-b border-border bg-white text-xs uppercase text-muted-foreground">
+                  <thead className="sticky top-0 border-b border-border bg-card text-xs uppercase text-muted-foreground">
                     <tr>
                       <th className="px-5 py-2.5">Contact</th>
                       <th className="px-5 py-2.5">Status</th>
@@ -429,7 +429,7 @@ export default function CampaignsPage() {
             <Label>Contacts * ({selectedContacts.size} selected)</Label>
             {allTags.length > 0 && (
               <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Group se select karo (click = us group ke sab contacts select):</p>
+                <p className="text-xs text-muted-foreground">Select from a group (click to add all of that group&apos;s contacts):</p>
                 <div className="flex max-h-20 flex-wrap gap-1.5 overflow-y-auto">
                   {allTags.map((t) => {
                     const count = tagCounts[t.id] ?? 0;
@@ -444,7 +444,7 @@ export default function CampaignsPage() {
                         onClick={() => selectWholeGroup(t.id, isSelected)}
                         className={cn(
                           "rounded-full px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60",
-                          isSelected ? "bg-primary text-white" : "border border-border bg-white text-muted-foreground hover:border-primary hover:text-primary"
+                          isSelected ? "bg-primary text-white" : "border border-border bg-card text-muted-foreground hover:border-primary hover:text-primary"
                         )}
                       >
                         {isSelecting ? <Loader2 className="inline h-3 w-3 animate-spin" /> : (isSelected ? "✓ " : "")}{t.name} ({count})

@@ -81,7 +81,7 @@ export default function AgentsPage() {
             { icon: MessageSquare, label: "Open Chats", value: totalOpen },
             { icon: Phone, label: "Team Members", value: members.length },
           ].map((s) => (
-            <div key={s.label} className="flex items-center gap-3 rounded-xl border border-border bg-white p-4">
+            <div key={s.label} className="flex items-center gap-3 rounded-xl border border-border bg-card p-4">
               <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 <s.icon className="h-4 w-4" />
               </span>
@@ -102,7 +102,7 @@ export default function AgentsPage() {
         </div>
 
         {/* Members list */}
-        <div className="mb-8 rounded-lg border border-border bg-white">
+        <div className="mb-8 rounded-lg border border-border bg-card">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-border text-xs uppercase text-muted-foreground">
@@ -153,7 +153,7 @@ export default function AgentsPage() {
         <h2 className="mb-3 text-sm font-semibold">Live Workload</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {agents.map((agent) => (
-            <div key={agent.member_id} className="rounded-xl border border-border bg-white p-4">
+            <div key={agent.member_id} className="rounded-xl border border-border bg-card p-4">
               <div className="flex items-start justify-between">
                 <div className="min-w-0">
                   <p className="truncate font-medium">{agent.full_name}</p>
